@@ -4,6 +4,7 @@ claExternalID (CAS LDAP Associate External ID) est un outil qui permet d'enregis
 ### Exemple d'autorisation du service dans CAS
 
 Créer les deux fichiers suivants dans src/main/resources/services/ puis packager votre CAS
+
 fichier claExternalID-75.json
 
 	{
