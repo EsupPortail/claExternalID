@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<web-app>   
+    <display-name>claExternalID</display-name>
+
+    <context-param>
+        <!-- the default log4j.properties does not make use of the webapp root feature -->
+        <param-name>log4jExposeWebAppRoot</param-name>
+        <param-value>false</param-value>
+    </context-param>
+
+    
+    <listener>
+      <listener-class>
+        org.esupportail.claExternalID.WebXml
+      </listener-class>
+    </listener>
+
+</web-app>
