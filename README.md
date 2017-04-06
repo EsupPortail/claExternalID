@@ -1,7 +1,19 @@
 # claExternalID
 claExternalID (CAS LDAP Associate External ID) est un outil qui permet d'enregistrer un identifiant externe sur le profil LDAP d'un utilisateur authentifié avec CAS
 
-### Exemple d'autorisation du service dans CAS
+## Configuration
+
+src/main/webapp/WEB-INF/config.json 
+
+## Build
+
+`mvn compile`
+
+## Deployment
+
+copier target/claExternalID.war dans votre serveur d'application (dossier webapps sous tomcat)
+
+## Exemple d'autorisation du service dans CAS
 
 Attention : sur un environnement de production, préciser l'expression regulière associée à la propriété serviceId.
 
@@ -59,4 +71,5 @@ fichier claExternalID-Associate-55.json
 	  }
 	}
 
-
+## Exemple de délégation d'authentification avec CAS
+https://github.com/aanli/cas-franceConnect-demo
