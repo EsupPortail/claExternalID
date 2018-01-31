@@ -14,6 +14,7 @@ import static org.esupportail.claExternalID.Utils.*;
 import com.google.gson.Gson;
 import java.io.IOException;
 
+import java.util.Enumeration;
 
 @SuppressWarnings("serial")
 public class Main extends HttpServlet {           
@@ -21,49 +22,48 @@ public class Main extends HttpServlet {
     org.apache.commons.logging.Log log = LogFactory.getLog(Main.class);
     Conf conf = null;
     Ldap ldap;
-
     
     public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException {
-	if (conf == null) initConf(request);
+        if (conf == null) initConf(request);
         try {
-		HttpSession session=request.getSession();
-		String target=request.getParameter("target");
-		log.debug("target="+target);
-
-	   	if(request.getServletPath().equals("/associate/")){
-			String externalID=(String)session.getAttribute("externalID");
-			String remoteUser=request.getRemoteUser();
-			log.debug("Associate path : externalID="+externalID);
-			log.debug("Associate path : remoteUser="+remoteUser);
-			if(externalID!=null && remoteUser!=null && !externalID.equals(remoteUser))
-				ldap.addAttribute(remoteUser, conf.refId_attribute, conf.refId_prefix+externalID);
-			else log.debug("externalID "+externalID+" does not associate to LDAP id "+remoteUser);
-
-			if(target!=null) response.sendRedirect(target);
-		}else{
-
-
-            	session.setAttribute("externalID",request.getRemoteUser());
-		log.debug("requestURL="+request.getRequestURL());
-		log.debug("remoteUser="+request.getRemoteUser());
-
-		session.removeAttribute(org.jasig.cas.client.util.AbstractCasFilter.CONST_CAS_ASSERTION);
-	    
-	        if(target!=null && !target.contains(request.getRequestURL()) && 
-			!request.getRequestURL().toString().contains(target) && 
-			request.getRemoteUser()!=null)
- 	            response.sendRedirect("associate/?target="+target);
-
-		if(target==null && request.getRemoteUser()!=null) response.sendRedirect("associate/");
-		}
-
+            HttpSession session=request.getSession();
+            String target=request.getParameter("target");
+            
+            if(request.getServletPath().equals("/associate/")){
+                String externalID=(String)session.getAttribute("externalID");
+                String remoteUser=request.getRemoteUser();
+                
+                log.debug("On page '/associate/' externalID="+externalID+" remoteUser="+remoteUser);
+                if(externalID!=null && remoteUser!=null && !externalID.equals(remoteUser)) {
+                    ldap.addAttribute(remoteUser, conf.refId_attribute, conf.refId_prefix+externalID);
+                } else log.debug("externalID "+externalID+" does not associate to LDAP id "+remoteUser);
+                
+                if(target!=null) {
+                    log.debug("Redirect to " + target);
+                    response.sendRedirect(target);
+                }
+            
+            } else {
+                String remoteUser = request.getParameter("principal");
+                session.setAttribute("externalID", remoteUser);
+                log.debug("On page '/' remoteUser="+remoteUser);
+                
+                if(target!=null && !target.contains(request.getRequestURL()) && !request.getRequestURL().toString().contains(target) && remoteUser!=null){
+                    log.debug("Redirect to associate/?target=" + target);
+                    response.sendRedirect("associate/?target="+target);
+                }
+                
+                if(target==null && remoteUser!=null) {
+                    log.debug("Redirect to [associate/]");
+                    response.sendRedirect("associate/");
+                }
+            }
         } catch (Exception e) {
             log.error(e);
         }
     }
-   
 
- synchronized void initConf(HttpServletRequest request) {
+    synchronized void initConf(HttpServletRequest request) {
         ServletContext sc = request.getServletContext();
         conf = getConf(sc);
         ldap = new Ldap(conf.ldap);
@@ -83,8 +83,5 @@ public class Main extends HttpServlet {
         s = s.replaceAll(",(\\s*[\\]}])", "$1");
         return s;
     }
-
-
- 
 }
 

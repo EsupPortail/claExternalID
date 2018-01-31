@@ -19,25 +19,17 @@ public class WebXml implements ServletContextListener {
 
     private void configure(ServletContext sc) {
         Conf conf = Main.getConf(sc);
-                
-        addFilter(sc, "CAS Single Sign Out", SingleSignOutFilter.class,
-                  asMap("casServerUrlPrefix", conf.cas_base_url),
-                  "/");
-
+               
         addFilter(sc, "CAS Authentication", AuthenticationFilter.class,
                   asMap("casServerLoginUrl", conf.cas_login_url)
-                   .add("serverName", url2host(conf.claExternalID_url)),
-                  "/","/associate/");
+                   .add("serverName", url2host(conf.claExternalID_url)), "/associate/");
 
         addFilter(sc, "CAS Validate", Cas20ProxyReceivingTicketValidationFilter.class,
                   asMap("casServerUrlPrefix", conf.cas_base_url)
                    .add("serverName", url2host(conf.claExternalID_url))
-                   .add("redirectAfterValidation", "false"), 
-                  "/","/associate/");
+                   .add("redirectAfterValidation", "false"), "/associate/");
 
-
-        addFilter(sc, "CAS Request Wrapper", HttpServletRequestWrapperFilter.class, null,
-                  "/","/associate/");
+        addFilter(sc, "CAS Request Wrapper", HttpServletRequestWrapperFilter.class, null, "/associate/");
         
         addServlet(sc, "org.esupportail.claExternalID", Main.class, null, "/");
     }
