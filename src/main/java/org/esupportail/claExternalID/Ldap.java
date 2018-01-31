@@ -24,7 +24,7 @@ class Ldap {
     static class Attrs extends HashMap<String, List<String>> {}
 
     static class LdapConf {
-        String url, bindDN, bindPasswd, peopleDN;
+        String url, bindDN, bindPasswd, peopleDN, principalId;
     }
     LdapConf ldapConf;
     DirContext dirContext;
@@ -71,11 +71,11 @@ class Ldap {
     }
 
     void setAttribute(String uid, String attr, String value) throws NamingException, InvalidAttributeIdentifierException, NoPermissionException {
-        rawSetAttribute("uid=" + uid + "," + ldapConf.peopleDN, attr, value);
+        rawSetAttribute(ldapConf.principalId + "=" + uid + "," + ldapConf.peopleDN, attr, value);
     }
 
     void addAttribute(String uid, String attr, String value) throws NamingException, InvalidAttributeIdentifierException, NoPermissionException {
-        rawAddAttribute("uid=" + uid + "," + ldapConf.peopleDN, attr, value);
+        rawAddAttribute(ldapConf.principalId + "=" + uid + "," + ldapConf.peopleDN, attr, value);
     }    
 
 }

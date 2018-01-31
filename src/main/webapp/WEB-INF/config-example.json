@@ -9,6 +9,7 @@
         "url": "ldap://ldap.univ.fr",
         "bindDN": "<bindDN>",
         "bindPasswd": "<bindPasswd>",
-        "peopleDN": "ou=people,dc=univ,dc=fr"
+        "peopleDN": "ou=people,dc=univ,dc=fr",
+        "principalId":"cn"
     }
 }
