@@ -67,7 +67,7 @@ Vous aurez aussi besoin de modifier le comportement de votre fichier de service 
     "usernameAttribute" : "uid"
   },
   "accessStrategy": {
-    "@class" : "org.esupportail.UP1.services.UP1RegisteredServiceAccessStrategy",
+    "@class" : "org.esupportail.cas.services.ClaExternalIDRegisteredServiceAccessStrategy",
     "unauthorizedRedirectUrl" : "https://my-jetty-server.com:8082/claExternalID/",
     "requiredAttributes" : {
 	    "@class" : "java.util.HashMap",
