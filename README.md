@@ -28,7 +28,7 @@ Attention : sur un environnement de production, préciser l'expression regulièr
 
 Créer ce fichier suivants dans votre dossier services/ ou via l'application Service Management application
 
-Fichier claExternalID-Associate-55.json
+Fichier claExternalID_Associate-55.json
 ``` json
 {
   "@class" : "org.apereo.cas.services.RegexRegisteredService",
