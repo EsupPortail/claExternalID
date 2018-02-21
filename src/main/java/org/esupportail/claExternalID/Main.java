@@ -58,6 +58,9 @@ public class Main extends HttpServlet {
                     response.sendRedirect("associate/");
                 }
             }
+            
+            log.debug("No valid page or arguments, redirect to CAS");
+            response.sendRedirect(conf.cas_base_url);
         } catch (Exception e) {
             log.error(e);
         }
