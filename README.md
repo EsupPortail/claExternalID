@@ -1,6 +1,8 @@
 # claExternalID
 claExternalID (CAS LDAP Associate External ID) est un outil qui permet d'enregistrer un identifiant externe sur le profil LDAP d'un utilisateur authentifié avec CAS
 
+CAS doit etre utilisé en HTTPS afin de faire fonctionner le module
+
 ## Configuration
 
 src/main/webapp/WEB-INF/config.json 
@@ -99,12 +101,21 @@ cas.authn.attributeRepository.ldap[0].useSsl=false
 cas.authn.attributeRepository.ldap[0].baseDn=ou=users,dc=univ,dc=fr
 cas.authn.attributeRepository.ldap[0].userFilter=(supannRefId={FranceConnect}{user})
 
+# Must be the same as usernameAttributeProvider
 cas.authn.attributeRepository.ldap[0].attributes.uid=uid
+# Optional, depending on your settings
 cas.authn.attributeRepository.ldap[0].attributes.cn=cn
 
 # Display attributes
 cas.authn.attributeRepository.defaultAttributesToRelease=uid,cn
 ```
+
+Enlever le paramétre de cache. Vu que plusieurs requetes sont faites à moment different lors de l'authentification, le cache pose probleme pour le rafraichissement 
+des attributs qui sont mis à jour par notre module.
+```properties
+cas.authn.attributeRepository.expireInMinutes=0
+```
+
 
 ## Fonctionnement technique
 

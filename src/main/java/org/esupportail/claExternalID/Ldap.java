@@ -18,6 +18,11 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import static org.esupportail.claExternalID.Utils.asMap;
+
+import java.util.Collections;
+import javax.naming.directory.SearchResult;
+import java.util.ArrayList;
+import java.util.Enumeration;
     
 class Ldap {
     @SuppressWarnings("serial")
@@ -76,6 +81,16 @@ class Ldap {
 
     void addAttribute(String uid, String attr, String value) throws NamingException, InvalidAttributeIdentifierException, NoPermissionException {
         rawAddAttribute(ldapConf.principalId + "=" + uid + "," + ldapConf.peopleDN, attr, value);
-    }    
+    }
+
+    boolean hasAttribute(String uid, String attr, String value) throws NamingException, InvalidAttributeIdentifierException, NoPermissionException {
+        boolean valid = false;
+        ArrayList<SearchResult> list = Collections.list(getDirContext().search(ldapConf.peopleDN, "(" + attr + "=" + value + ")", new javax.naming.directory.SearchControls()));
+        for (SearchResult result : list) {
+            valid = true;
+            log.error("The user '" + result.getAttributes().get(ldapConf.principalId).get() + "' already has an '" + attr + "' with value '" + value + "'");
+        }
+        return valid;
+    }
 
 }

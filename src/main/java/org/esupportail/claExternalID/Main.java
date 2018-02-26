@@ -28,6 +28,7 @@ public class Main extends HttpServlet {
         try {
             HttpSession session=request.getSession();
             String target=request.getParameter("target");
+            String redirectUrl = conf.cas_base_url;
             
             if(request.getServletPath().equals("/associate/")){
                 String externalID=(String)session.getAttribute("externalID");
@@ -35,32 +36,33 @@ public class Main extends HttpServlet {
                 
                 log.debug("On page '/associate/' externalID="+externalID+" remoteUser="+remoteUser);
                 if(externalID!=null && remoteUser!=null && !externalID.equals(remoteUser)) {
-                    ldap.addAttribute(remoteUser, conf.refId_attribute, conf.refId_prefix+externalID);
-                } else log.debug("externalID "+externalID+" does not associate to LDAP id "+remoteUser);
+                    if(!ldap.hasAttribute(remoteUser, conf.refId_attribute, conf.refId_prefix+externalID)){
+                        ldap.addAttribute(remoteUser, conf.refId_attribute, conf.refId_prefix+externalID);
+                    }
+                } else {
+                    log.debug("externalID "+externalID+" does not associate to LDAP id "+remoteUser);
+                }
                 
                 if(target!=null) {
-                    log.debug("Redirect to " + target);
-                    response.sendRedirect(target);
+                    redirectUrl = target;
                 }
             
             } else {
                 String remoteUser = request.getParameter("principal");
                 session.setAttribute("externalID", remoteUser);
                 log.debug("On page '/' remoteUser="+remoteUser);
-                
+                session.removeAttribute(org.jasig.cas.client.util.AbstractCasFilter.CONST_CAS_ASSERTION);
                 if(target!=null && !target.contains(request.getRequestURL()) && !request.getRequestURL().toString().contains(target) && remoteUser!=null){
-                    log.debug("Redirect to associate/?target=" + target);
-                    response.sendRedirect("associate/?target="+target);
-                }
-                
-                if(target==null && remoteUser!=null) {
-                    log.debug("Redirect to [associate/]");
-                    response.sendRedirect("associate/");
+                    redirectUrl = "associate/?target=" + target;
                 }
             }
             
-            log.debug("No valid page or arguments, redirect to CAS");
-            response.sendRedirect(conf.cas_base_url);
+            if(redirectUrl == conf.cas_base_url){
+                log.debug("No valid page or arguments, redirect to CAS");
+            }
+            log.debug("Redirect to " + redirectUrl);
+            response.sendRedirect(redirectUrl);
+            
         } catch (Exception e) {
             log.error(e);
         }

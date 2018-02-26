@@ -19,6 +19,9 @@ public class WebXml implements ServletContextListener {
 
     private void configure(ServletContext sc) {
         Conf conf = Main.getConf(sc);
+        /*addFilter(sc, "CAS Single Sign Out", SingleSignOutFilter.class,		
+           asMap("casServerUrlPrefix", conf.cas_base_url),		
+           "/");*/
                
         addFilter(sc, "CAS Authentication", AuthenticationFilter.class,
                   asMap("casServerLoginUrl", conf.cas_login_url)
