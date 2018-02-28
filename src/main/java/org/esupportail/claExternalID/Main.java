@@ -15,6 +15,7 @@ import com.google.gson.Gson;
 import java.io.IOException;
 
 import java.util.Enumeration;
+import java.net.URLEncoder;
 
 @SuppressWarnings("serial")
 public class Main extends HttpServlet {           
@@ -36,14 +37,19 @@ public class Main extends HttpServlet {
                 
                 log.debug("On page '/associate/' externalID="+externalID+" remoteUser="+remoteUser);
                 if(externalID!=null && remoteUser!=null && !externalID.equals(remoteUser)) {
+                    log.debug("Checking Link");
                     if(!ldap.hasAttribute(remoteUser, conf.refId_attribute, conf.refId_prefix+externalID)){
+                        log.debug("Adding Link");
                         ldap.addAttribute(remoteUser, conf.refId_attribute, conf.refId_prefix+externalID);
                     }
+                    redirectUrl = target;
+                } else if(externalID!=null && remoteUser!=null && externalID.equals(remoteUser)) {
+                    session.removeAttribute(org.jasig.cas.client.util.AbstractCasFilter.CONST_CAS_ASSERTION);
+                    log.debug("externalID and remoteUser are equals, send back to logout");
+                    // means the user is already connected with FranceConnect, needs to logout the user
+                    redirectUrl = conf.cas_logout_url + "?service=" + conf.claExternalID_url + "/associate/?target=" + target;
                 } else {
                     log.debug("externalID "+externalID+" does not associate to LDAP id "+remoteUser);
-                }
-                
-                if(target!=null) {
                     redirectUrl = target;
                 }
             
@@ -51,7 +57,7 @@ public class Main extends HttpServlet {
                 String remoteUser = request.getParameter("principal");
                 session.setAttribute("externalID", remoteUser);
                 log.debug("On page '/' remoteUser="+remoteUser);
-                session.removeAttribute(org.jasig.cas.client.util.AbstractCasFilter.CONST_CAS_ASSERTION);
+                
                 if(target!=null && !target.contains(request.getRequestURL()) && !request.getRequestURL().toString().contains(target) && remoteUser!=null){
                     redirectUrl = "associate/?target=" + target;
                 }
