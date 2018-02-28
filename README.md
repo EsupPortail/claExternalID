@@ -116,6 +116,12 @@ des attributs qui sont mis à jour par notre module.
 cas.authn.attributeRepository.expireInMinutes=0
 ```
 
+Afin de pouvoir s'identifier au prealable sur FranceConnect à d'autre service du meme domaine, claExternalID a besoin de logout
+l'utilisateur via l'adresse "https://my_cas_example.com/cas/logout?service=https://my_claExternalID_example.com/claExternalID/associate..."
+Nous devons activer l'option dans CAS
+```properties
+cas.logout.followServiceRedirects=true
+```
 
 ## Fonctionnement technique
 
