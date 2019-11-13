@@ -48,7 +48,7 @@ Fichier claExternalID_Associate-55.json
       "delegatedAuthenticationPolicy" : {
           "@class" : "org.apereo.cas.services.DefaultRegisteredServiceDelegatedAuthenticationPolicy",
           "allowedProviders" : [ "java.util.ArrayList", [""] ]
-    }
+      }
   },  
   "attributeReleasePolicy" : {
       "@class" : "org.apereo.cas.services.ReturnAllAttributeReleasePolicy",
