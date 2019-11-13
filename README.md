@@ -103,16 +103,18 @@ cas.authn.ldap[0].searchFilter=cn={user}
 
 cas.authn.ldap[0].principalAttributeList=uid
 
+# Identities reconciliation
 cas.authn.attributeRepository.ldap[0].ldapUrl=ldap://ldap.univ.fr
 cas.authn.attributeRepository.ldap[0].useSsl=false
 cas.authn.attributeRepository.ldap[0].baseDn=ou=users,dc=univ,dc=fr
+# To retrieve LDAP data fill in values unless your ACL permits you to do it without.
+cas.authn.attributeRepository.ldap[0].bindDn=
+cas.authn.attributeRepository.ldap[0].bindCredential=
 cas.authn.attributeRepository.ldap[0].searchFilter=(supannRefId={FranceConnect}{user})
-
 # Must be the same as usernameAttributeProvider
 cas.authn.attributeRepository.ldap[0].attributes.uid=uid
 # Optional, depending on your settings
 cas.authn.attributeRepository.ldap[0].attributes.cn=cn
-
 # Display attributes
 cas.authn.attributeRepository.defaultAttributesToRelease=uid,cn
 ```
@@ -127,9 +129,10 @@ cas.authn.attributeRepository.expirationTime=0
 
 Disons que notre claExternalId a comme adresse `https://my-jetty-server.com:8082/claExternalID/`
 - CAS vérifie si, après l'authentification OIDC, que l'UID est présent
-  - Si non, renvoi vers l'URL du serveur claExternalID
+  - Si non, renvoi vers l'URL du serveur claExternalID (1)
   - Si oui, renvoi vers le service demandé
 
+(1)
 - Arrivé sur `https://my-jetty-server.com:8082/claExternalID/`, enregistre en session l'ID OIDC.
 - Renvoi vers `https://my-jetty-server.com:8082/claExternalID/associate`, celui-ci demandera une authentification CAS via le login Form.
 - L'identification se fait sur CAS et renvoie vers `https://my-jetty-server.com:8082/claExternalID/associate` qui lie l'ID OIDC avec le UID.
