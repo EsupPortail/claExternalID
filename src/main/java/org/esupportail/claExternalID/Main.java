@@ -57,10 +57,12 @@ public class Main extends HttpServlet {
                 }
             }
             
+	    log.debug("redirectUrl="+redirectUrl);
             if(redirectUrl == conf.cas_base_url){
                 log.debug("No valid page or arguments, redirect to CAS");
             }
             log.debug("Redirect to " + redirectUrl);
+	    redirectUrl=redirectUrl.replaceFirst("\\?target=.*\\?","?");
             response.sendRedirect(redirectUrl);
             
         } catch (Exception e) {
