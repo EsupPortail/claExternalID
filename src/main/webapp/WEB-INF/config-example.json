@@ -10,6 +10,11 @@
         "bindDN": "<bindDN>",
         "bindPasswd": "<bindPasswd>",
         "peopleDN": "ou=people,dc=univ,dc=fr",
-        "principalId":"cn"
+        "principalId":"cn",
+        "birthdate":"up1BirthDay",
+        "mailPerso":"supannMailPerso",
+        "civility":"supannCivilite",
+        "family_name":"up1BirthName",
+        "given_name":"givenName"
     }
 }
