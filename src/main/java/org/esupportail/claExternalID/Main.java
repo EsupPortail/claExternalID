@@ -130,13 +130,12 @@ public class Main extends HttpServlet {
                       }
 
                  }else{
-                     log.debug("Something went wrong during the LDAP search process");
                      log.info("Here is data retrieved from FC idp :  given_name="+given_name+"  | email="+email+"  | gender="+gender+"  | family_name="+family_name+"  | birthdate="+birthdate);
                      if(res.size() > 1){
-                       log.info("The different entries retrieved");
+                       log.error("The different entries retrieved");
                        ldap.getSearchResult(res);
                      }else{
-                       log.info("No LDAP entries matching with provided data");
+                       log.error("No LDAP entries matching with provided data");
                      }
                     redirectUrl = "associate/?target=" + target;
                   }

@@ -139,7 +139,7 @@ class Ldap {
               queryresult = queryresult + attr;
               queryresult = queryresult + "\t";
           }
-          log.info("LDAP entry found  "+queryresult);
+          log.error("LDAP entry found  "+queryresult);
         }
       }
       return uid;
