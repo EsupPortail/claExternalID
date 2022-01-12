@@ -75,7 +75,7 @@ public class Main extends HttpServlet {
               //String preferred_username = request.getParameter("preferred_username");
 
 
-              if (gender.equals("male"))
+              if (gender.equals("MALE"))
                 gender = "M.";
                 else
                 gender = "Mme";
@@ -110,7 +110,7 @@ public class Main extends HttpServlet {
                 //Récupérer les attributs LDAP depuis le mail transmis par FC
                //Puis faire la comparaison avec la pseudo-ID pivot (Nom de naissance, prénom, sexe, date de naissance) + mail  --> LDAP(sn, givenName,   ,up1BirthDay) --> FC(family_name, given_name, gender, birthdate)
                 if(target!=null && !target.contains(request.getRequestURL()) && !request.getRequestURL().toString().contains(target) && remoteUser!=null){
-                  String searchFilter = "(&("+conf.ldap.birthdate+"="+birthdate+")("+conf.ldap.mailPerso+"="+email+")("+conf.ldap.civility+"="+gender+")("+conf.ldap.family_name+"="+family_name+")("+conf.ldap.given_name+"="+given_name+"))";
+                  String searchFilter = "(&("+conf.ldap.birthdate+"="+birthdate+")(|("+conf.ldap.mailPerso+"="+email+")("+conf.ldap.mail+"="+email+"))("+conf.ldap.civility+"="+gender+")("+conf.ldap.family_name+"="+family_name+")("+conf.ldap.given_name+"="+given_name+"))";
                  ArrayList<? extends SearchResult> res = Collections.list(ldap.getEntryForReconciliation(searchFilter));
                  if(res.size() == 1){
                       log.debug("Successful LDAP search, redirecting to target");

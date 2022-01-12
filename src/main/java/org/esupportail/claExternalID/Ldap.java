@@ -33,7 +33,7 @@ class Ldap {
     static class Attrs extends HashMap<String, List<String>> {}
 
     static class LdapConf {
-        String url, bindDN, bindPasswd, peopleDN, principalId, birthdate, mailPerso, civility, family_name, given_name;
+        String url, bindDN, bindPasswd, peopleDN, principalId, birthdate, mailPerso, mail, civility, family_name, given_name;
     }
     LdapConf ldapConf;
     DirContext dirContext;
@@ -98,13 +98,14 @@ class Ldap {
     }
 
     NamingEnumeration<? extends SearchResult> getEntryForReconciliation(String filter) throws NamingException {
-      //(&(up1BirthDay=19500101000000Z)(supannMailPerso=johnS@yahoo.fr)(supannCivilite=M.)(up1BirthName=Smith)(givenName=John))
+      //(&(up1BirthDay=19500101000000Z)(|(supannMailPerso=johnS@yahoo.fr)(mail=johnS@yahoo.fr))(supannCivilite=M.)(up1BirthName=Smith)(givenName=John))
         log.debug(filter);
         SearchControls controls = new SearchControls();
         controls.setSearchScope(SearchControls.SUBTREE_SCOPE);
         controls.setReturningAttributes(new String [] {
                   ldapConf.principalId,
                   ldapConf.mailPerso,
+                  ldapConf.mail,
                   ldapConf.birthdate,
                   ldapConf.civility,
                   ldapConf.family_name,
