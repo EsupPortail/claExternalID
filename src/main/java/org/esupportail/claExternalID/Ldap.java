@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.Map;
+import java.util.Date;
 import javax.naming.Context;
 import javax.naming.NamingException;
 import javax.naming.NoPermissionException;
@@ -31,6 +32,11 @@ import java.util.Enumeration;
 class Ldap {
     @SuppressWarnings("serial")
     static class Attrs extends HashMap<String, List<String>> {}
+
+    private Date creationContextDate= new Date();
+
+    static final int DURATION_CONTEXT=5*60*1000; // 5 min
+
 
     static class LdapConf {
         String url, bindDN, bindPasswd, peopleDN, principalId, birthdate, mailPerso, mail, civility, family_name, given_name;
@@ -61,7 +67,16 @@ class Ldap {
 
     synchronized DirContext getDirContext() {
         if (dirContext == null) {
+            creationContextDate = new Date();
             dirContext = ldap_connect();
+        }else if((new Date()).getTime()-creationContextDate.getTime() > DURATION_CONTEXT ){
+          try{
+		  dirContext.close();
+	  }catch( NamingException e){
+		  log.error("error connecting to ldap server", e);
+	  }finally{
+		  dirContext = ldap_connect();
+	  }
         }
         return dirContext;
     }
