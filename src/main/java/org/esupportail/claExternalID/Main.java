@@ -34,7 +34,8 @@ public class Main extends HttpServlet {
     org.apache.commons.logging.Log log = LogFactory.getLog(Main.class);
     Conf conf = null;
     Ldap ldap;
-    
+
+
     public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException {
         if (conf == null) initConf(request);
         try {
@@ -46,17 +47,26 @@ public class Main extends HttpServlet {
 
             ArrayList<String> fcAttrs = new ArrayList<String>() ;
 
+
             if(request.getServletPath().equals("/associate/")){
                 String externalID=(String)session.getAttribute("externalID");
+                String birthdate=(String)session.getAttribute("birthdate");
+                String family_name=(String)session.getAttribute("family_name");
                 String remoteUser=request.getRemoteUser();
-                
+
                 log.debug("On page '/associate/' externalID="+externalID+" remoteUser="+remoteUser);
-                if(externalID!=null && remoteUser!=null && !externalID.equals(remoteUser)) {
+
+
+
+                if(externalID!=null && remoteUser!=null && !externalID.equals(remoteUser) && (ldap.hasAttribute(remoteUser, conf.ldap.birthdate, birthdate) || ldap.hasAttribute(remoteUser, conf.ldap.family_name, family_name) ) ) {
                     if(!ldap.hasAttribute(remoteUser, conf.refId_attribute, conf.refId_prefix+externalID)){
                         ldap.addAttribute(remoteUser, conf.refId_attribute, conf.refId_prefix+externalID);
                     }
                 } else {
-                    log.debug("externalID "+externalID+" does not associate to LDAP id "+remoteUser);
+                    log.warn("externalID "+externalID+" does not associate to LDAP id "+remoteUser);
+                    log.info("Birthdate recieved from FC ["+birthdate+"] does match with user ["+ remoteUser +"] birthdate ");
+                    log.info("Family name recieved from FC ["+family_name+"] does match with user ["+ remoteUser +"] family_name ");
+                    target= conf.cas_base_url+"/logout";
                 }
 
                 if(target!=null) {
@@ -95,7 +105,11 @@ public class Main extends HttpServlet {
               fcAttrs.add(birthdate);
             //fcAttrs.add(preferred_username);
 
-
+              session.setAttribute("given_name", given_name);
+              session.setAttribute("email", email);
+              session.setAttribute("gender", gender);
+              session.setAttribute("family_name", family_name);
+              session.setAttribute("birthdate", birthdate);
 
               for(String fcAttr : fcAttrs ){
                   log.debug("fcAttr---"+fcAttr);
