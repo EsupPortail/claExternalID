@@ -101,14 +101,16 @@ class Ldap {
     void addAttribute(String uid, String attr, String value) throws NamingException, InvalidAttributeIdentifierException, NoPermissionException {
         rawAddAttribute(ldapConf.principalId + "=" + uid + "," + ldapConf.peopleDN, attr, value);
     }
-
     boolean hasAttribute(String uid, String attr, String value) throws NamingException, InvalidAttributeIdentifierException, NoPermissionException {
+
         boolean valid = false;
-        ArrayList<SearchResult> list = Collections.list(getDirContext().search(ldapConf.peopleDN, "(" + attr + "=" + value + ")", new javax.naming.directory.SearchControls()));
-        for (SearchResult result : list) {
-            valid = true;
-            log.error("The user '" + result.getAttributes().get(ldapConf.principalId).get() + "' already has an '" + attr + "' with value '" + value + "'");
-        }
+        ArrayList<SearchResult> list = Collections.list(getDirContext().search(ldapConf.peopleDN, "(&(uid="+ uid +")("+ attr + "=" + value + "))", new javax.naming.directory.SearchControls()));
+        if(list.size()>1){
+          valid = false;
+          for (SearchResult result : list) {
+            log.debug("The user '" + result.getAttributes().get(ldapConf.principalId).get() + "' already has an '" + attr + "' with value '" + value + "'");
+          }
+        }else if (list.size() == 1 ){ valid = true;}
         return valid;
     }
 
