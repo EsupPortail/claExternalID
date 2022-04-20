@@ -1,32 +1,27 @@
 # claExternalID
 claExternalID (CAS LDAP Associate External ID) est un outil qui permet d'enregistrer un identifiant externe sur le profil LDAP d'un utilisateur authentifié avec CAS.
 
-CAS doit être utilisé en HTTPS afin de faire fonctionner le module.
-
-## Configuration
-
-src/main/webapp/WEB-INF/config.json 
-
-## Build
-
-`mvn compile`
-
-## Deployment
-
-Copier target/claExternalID.war dans votre serveur d'application (dossier webapps sous tomcat).
-
-ou 
-
-Run le serveur jetty en local simplement :
-`mvn -Djetty.port=8082 compile jetty:run`
-
 ## Intégration dans CAS
 
-Vous aurez besoin d'installer [EsupPortail/cas-server-support-claExternalID](https://github.com/EsupPortail/cas-server-support-claExternalID) dans votre application CAS afin de modifier le comportement et ainsi de recevoir les paramètres de l'OIDC.
+Vous aurez besoin de placer le script groovy à l'emplacement suivant : **$CAS_HOME/etc/cas/config/mon_script.groovy**
+
+et d'ajouter la propriéte suivante dans le fichier de propriété de CAS :
+
+```
+cas.interrupt.groovy.location=$CAS_HOME/etc/cas/config/interrupt.groovy
+```
+
+Comme vous aurez aussi besoin d'ajouter la dépendance suivante dans le fichier build.gradle pour activer la fonctionnalité permettant l'usage de cet outil :
+
+```
+implementation "org.apereo.cas:cas-server-support-interrupt-webflow:${project.'cas.version'}"
+```
+
+**$CAS_HOME** étant le repertoire d'installation de votre CAS-overlay-template
 
 ### Exemple d'autorisation du service dans CAS
 
-Attention : sur un environnement de production, préciser l'expression regulière associée à la propriété serviceId.
+Attention : préciser l'expression regulière associée à la propriété serviceId, en fonction du nom de domaine du serveur CAS.
 
 Créer le fichier suivant dans votre dossier services/ ou via l'application Service Management application.
 
@@ -34,62 +29,27 @@ Fichier claExternalID_Associate-55.json
 ``` json
 {
   "@class" : "org.apereo.cas.services.RegexRegisteredService",
-  "serviceId" : "^https?://.*/claExternalID/associate/.*",
-  "name" : "Votre identité FranceConnect n'est pas connue dans l'établissement",
+  "serviceId" : "https://localhost/claExternalID/associate",
+  "name" : "Bonjour",
+  "theme": "theme_apres_FranceConnect",
   "id" : 55,
-  "description" : "Veuillez vous authentifier auprès de l'université pour confirmer votre identité",
+  "description" : "Nous n'avons pas réussi à vous retrouver parmi nos utilisateurs.\nSi vous êtes étudiant ou personnel de l'université Paris 1 Panthéon-Sorbonne, veuillez vous authentifier. Cette opération est à réaliser une fois.\nSi vous n'êtes pas étudiant ou personnel de Paris 1, vous n'êtes pas autorisé à accéder à ce service. Veuillez cliquer sur \"Annuler\" pour vous déconnecter de FranceConnect",
   "evaluationOrder" : 55,
   "usernameAttributeProvider" : {
-      "@class" : "org.apereo.cas.services.PrincipalAttributeRegisteredServiceUsernameProvider",
-      "usernameAttribute" : "uid"
+    "@class" : "org.apereo.cas.services.PrincipalAttributeRegisteredServiceUsernameProvider",
+    "usernameAttribute" : "uid"
   },
   "accessStrategy": {
-      "@class" : "org.apereo.cas.services.DefaultRegisteredServiceAccessStrategy",
-      "delegatedAuthenticationPolicy" : {
-          "@class" : "org.apereo.cas.services.DefaultRegisteredServiceDelegatedAuthenticationPolicy",
-          "allowedProviders" : [ "java.util.ArrayList", [""] ]
-      }
-  },  
-  "attributeReleasePolicy" : {
-      "@class" : "org.apereo.cas.services.ReturnAllAttributeReleasePolicy",
-      "principalAttributesRepository" : {
-          "@class" : "org.apereo.cas.authentication.principal.cache.CachingPrincipalAttributesRepository",
-          "mergingStrategy" : "ADD"
-      }
+     "@class" : "org.apereo.cas.services.DefaultRegisteredServiceAccessStrategy",
+     "requiredAttributes" : {
+	    "@class" : "java.util.HashMap",
+	    "uid" : [ "java.util.HashSet", [ ".*" ] ]
+     }
   }
 }
 ```
 
-Vous aurez aussi besoin de modifier le comportement de votre fichier de service par défaut.
-Fichier ALL-100.json
-
-``` json
-{
-  "@class" : "org.apereo.cas.services.RegexRegisteredService",
-  "serviceId" : "^(https|imaps)://.*",
-  "name" : "Identifiez vous",
-  "id" : 100,
-  "description" : "Bienvenue sur notre site",
-  "evaluationOrder" : 100,
-  "usernameAttributeProvider" : {
-      "@class" : "org.apereo.cas.services.PrincipalAttributeRegisteredServiceUsernameProvider",
-      "usernameAttribute" : "uid"
-  },
-  "accessStrategy": {
-      "@class" : "org.esupportail.cas.services.ClaExternalIDRegisteredServiceAccessStrategy",
-      "unauthorizedRedirectUrl" : "https://my-jetty-server.com:8082/claExternalID/",
-      "requiredAttributes" : {
-          "@class" : "java.util.HashMap",
-          "uid" : [ "java.util.HashSet", [ ".*" ] ]
-      }
-  }
-}
-```
-Ce fichier forcera le service `^(https|imaps)://.*` à verifier la présence de l'argument `uid` lors du renvoi 
-des paramètres de l'OIDC et autre `attributeRepository`, si ce n'est le cas (ne devrait pas à la première 
-authentification), CAS renvoie vers `unauthorizedRedirectUrl`. 
-
-De plus, vous aurez finalement besoin de configurer CAS afin que celui retrouve votre utilisateur lors de la seconde 
+De plus, vous aurez finalement besoin de configurer CAS afin que celui-ci retrouve votre utilisateur lors de la seconde 
 authentification :
 
 ``` properties
@@ -102,6 +62,11 @@ cas.authn.ldap[0].dnFormat=ou=users,dc=univ,dc=fr
 cas.authn.ldap[0].searchFilter=cn={user}
 
 cas.authn.ldap[0].principalAttributeList=uid
+
+#Usage d'un bind applicatif dédié
+cas.custom.properties.claExternalID-ldap-bindDn=......
+cas.custom.properties.claExternalID-ldap-bindCredential=**************
+
 
 # Identities reconciliation
 cas.authn.attributeRepository.ldap[0].ldapUrl=ldap://ldap.univ.fr
@@ -125,19 +90,28 @@ cas.authn.attributeRepository.expirationTime=0
 ```
 
 
-## Fonctionnement technique
+## Fonctionnement technique sous les versions 6.x de CAS
 
-Disons que notre claExternalId a comme adresse `https://my-jetty-server.com:8082/claExternalID/`
+L'essentiel de cet outil repose enrtièrement sur le mechanisme d'interruption mis à dispostion par CAS, qui permet de reprendre la même cinématique d'éxécution que celle des versions antérieurs :
 - CAS vérifie si, après l'authentification OIDC, que l'UID est présent
-  - Si non, renvoi vers l'URL du serveur claExternalID (1)
-  - Si oui, renvoi vers le service demandé
+    - Sinon, vérifie si il est possible de procéder à une réconciliation automatique des identités :
+        - Si oui, renvoi vers le service demandé
+        - Sinon procéde à une tentative de réconciliation manuelle des identités :
+            - Si réussie, renvoi vers le service demandé
+            - Sinon bloque l'accès au service
+    - Si oui, renvoi vers le service demandé
 
-(1)
-- Arrivé sur `https://my-jetty-server.com:8082/claExternalID/`, enregistre en session l'ID OIDC.
-- Renvoi vers `https://my-jetty-server.com:8082/claExternalID/associate`, celui-ci demandera une authentification CAS via le login Form.
-- L'identification se fait sur CAS et renvoie vers `https://my-jetty-server.com:8082/claExternalID/associate` qui lie l'ID OIDC avec le UID.
-- Renvoi vers le service d'origine demandé lors de la première authentification.
+## Interface graphique
 
-## TO DO
+La fonctionnalité regissant l'interruption des authentifctaions offerte par CAS, génére lors de l'éxécution une vue spécifique et dont le contenue s'adapte en fonction de l'état de l'authentification déclenchée,
+si besoin vous pourrez modifier l'aspect de cette dernière pour qu'elle corresponde mieux à vos besoins.
 
-- Integrate this module to the CAS WEBFLOW.
+ci-dessous la commande à taper pour accèder à cette vue :
+```
+./gradlew[.bat] getResource -PresourceName=casInterruptView.html
+```
+
+
+
+
+
