@@ -1,253 +1,242 @@
 import org.apereo.cas.interrupt.InterruptResponse
 
-import org.apereo.cas.util.LdapUtils
 import org.ldaptive.DefaultConnectionFactory
-import org.ldaptive.SearchResponse
-import org.ldaptive.SearchOperation
-import org.ldaptive.SearchRequest
 import org.ldaptive.ConnectionConfig
-import org.ldaptive.ConnectionFactory
 import org.ldaptive.AttributeModification
 import org.ldaptive.ModifyOperation
 import org.ldaptive.ModifyRequest
 import org.ldaptive.ModifyResponse
-import org.ldaptive.LdapException
-import org.ldaptive.Connection
 import org.ldaptive.LdapAttribute
-import org.ldaptive.LdapEntry
 import org.ldaptive.BindConnectionInitializer
 import org.ldaptive.ConnectionInitializer
-import org.apereo.cas.web.support.WebUtils
+import org.ldaptive.SearchOperation
+import org.ldaptive.SearchRequest
 import org.apereo.cas.configuration.CasConfigurationProperties
-import org.apereo.cas.authentication.principal.SimplePrincipal
 
-
-import java.text.DateFormat
 import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Calendar
 import java.time.Duration
 import javax.servlet.http.HttpServletRequest
-import javax.servlet.http.HttpSession
 
 
-String getBirthdate(Object birthdate) {
-	String[] birthD = birthdate.split("-")
-	Calendar calendar = Calendar.getInstance()
-	int year = birthD[0].toInteger()
-	int month = birthD[1].toInteger()
-	int day = birthD[2].toInteger()
-	calendar.set(year,month-1,day,0,0,0)
-	SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMddHHmmss'Z'")
-	return dateFormat.format(calendar.getTime())
+def claExternalIDService() { return "https://localhost/claExternalID/associate" }
+def block() { return false }
+def ssoEnabled() { return true }
+
+String getFirst(Object attributes, String name) {
+    def vals = attributes.get(name)
+    return vals == null ? null : vals[0]
 }
 
-boolean containsLdapAttrs(Object attrs) {
-	return attrs.containsKey("givenName") && attrs.containsKey("up1BirthName") && attrs.containsKey("up1BirthDay") && attrs.containsKey("mail") && attrs.containsKey("supannMailPerso") && attrs.containsKey("supannCivilite")
+// input format is YYYY-MM-DD
+String to_LDAP_generalizedTime(String birthdate) {    
+    return birthdate.replace("-", "") + "000000Z"
 }
 
-String getLDAPUserBirthdate(String ldapUrl, String bindDn, String baseDn, String bindCredential, String uid){
-	    def searchFilter = "(uid="+uid+")"
-        DefaultConnectionFactory dcf = ldap_connect(ldapUrl, bindDn, bindCredential)
-	    Connection connection = dcf.getConnection()
-	    def result
-		def up1BirthDay=null
-
-	    try {
-			connection.open()
-			if (connection.isOpen()) {
-				result =  LdapUtils.executeSearchOperation(dcf, baseDn, LdapUtils.newLdaptiveSearchFilter(searchFilter), 10, null)
-				if(LdapUtils.containsResultEntry(result)) {
-					LdapEntry entry = result.getEntry()
-					up1BirthDay= LdapUtils.getString(entry, "up1BirthDay", null)
-                    connection.close()
-					return up1BirthDay
-				}
-			}
-		}catch(LdapException e) {
-		  logger.error("[{}]", e.getMessage())
-		}finally {
-		  connection.close()
-		}
-
-		return up1BirthDay
-}
-
-DefaultConnectionFactory ldap_connect(String url, String bindDn, String bindCredential) {
-	ConnectionConfig cc = new ConnectionConfig()
+DefaultConnectionFactory ldaptive_connection(conf) {
+	def cc = new ConnectionConfig()
 	cc.setReconnectTimeout(Duration.ofSeconds(60))
 	cc.setResponseTimeout(Duration.ofSeconds(60))
-	cc.setLdapUrl(url)
-	BindConnectionInitializer bindConn = new BindConnectionInitializer(bindDn, bindCredential)
+	cc.setLdapUrl(conf.ldapUrl)
+	def bindConn = new BindConnectionInitializer(conf.bindDn, conf.bindCredential)
 	ConnectionInitializer[] cnis = [bindConn]
 	cc.setConnectionInitializers (cnis)
 
-	DefaultConnectionFactory dcf = new DefaultConnectionFactory(cc)
-	return  dcf
+	return new DefaultConnectionFactory(cc)
 }
 
+ModifyResponse add_supannFCSub(conf, dcf, String fc_sub, String ldap_uid) {
+    def requestModify = 
+        new ModifyRequest("uid=${ldap_uid},${conf.baseDn}", 
+            new AttributeModification(AttributeModification.Type.ADD, new LdapAttribute("supannFCSub", fc_sub)))
+    return new ModifyOperation(dcf).execute(requestModify)
+}
 
-def run(final Object... args) {
-	def principal = args[0]
-	def attributes = args[1]
-	def service = args[2]
-	def registeredService = args[3]
-	def requestContext = args[4]
-	def logger = args[5]
+ModifyResponse remove_supannFCSub(conf, dcf, String fc_sub, ldap_uid) {
+    def requestModify = 
+        new ModifyRequest("uid=${ldap_uid},${conf.baseDn}", 
+            new AttributeModification(AttributeModification.Type.DELETE, new LdapAttribute("supannFCSub", fc_sub)))
+    return new ModifyOperation(dcf).execute(requestModify)
+}
 
-	def block = false
-	def ssoEnabled = true
+String getLDAPUserBirthdate(conf, String uid){
+    def searchRequest = SearchRequest.builder()
+        .dn(conf.baseDn)
+        .filter("(uid=${uid})")
+        .returnAttributes("up1BirthDay")
+        .sizeLimit(2)
+        .build()
+    def response = new SearchOperation(ldaptive_connection(conf)).execute(searchRequest);
+    return response.getEntry()?.getAttribute("up1BirthDay")?.getStringValue()
+}
 
-	def session = ((HttpServletRequest)requestContext.getExternalContext().getNativeRequest()).getSession()
+def removeTestsFcSub(conf) {
+    def dcf = ldaptive_connection(conf)
+    remove_supannFCSub(conf, dcf, "bb9efb98cd8d8dee7c1cfd7f3a2d7937fbbd09068b2ac4dce801abaa6eb8e6b4v1", "pldupont")
+    remove_supannFCSub(conf, dcf, "ced88a7b04db5c2e2aefa09ac11966ce8f70502dcc40651b2d74e52fe49b97dfv1", "pldupont")
+}
 
-	CasConfigurationProperties props= requestContext.getActiveFlow().getApplicationContext().getBean(CasConfigurationProperties.class);
+def force_LDAP_login(conf, logger, service, attributes, session) {
 
+    logger.info("on sauvegarde les infos FranceConnect en session")
+    session.setAttribute("target", service.getId());
+    for (def attr in ["sub", "birthdate"]) {
+        session.setAttribute(attr, getFirst(attributes, attr));
+    }
 
-	def ldapUrl = props.getAuthn().getLdap().get(0).getLdapUrl()
-	def bindDn = props.getCustom().getProperties().get("claExternalID-ldap-bindDn")
-    def bindCredential = props.getCustom().getProperties().get("claExternalID-ldap-bindCredential")
-	def baseDn = props.getAuthn().getLdap().get(0).getBaseDn()
+    // => on force un cas/login avec le service claExternalID (donc avec FranceConnect non autorisé)
+    // NB : le service https://localhost/claExternalID/associate n'est jamais atteint
+    logger.info("on force cas/login avec le service claExternalID")
 
-	def cas_server_name = props.getServer().getName()
-	def cas_prefix_name = props.getServer().getPrefix()
+    // NB: convert from GString to String
+    def redirect_url = "${conf.cas_prefix_name}/login?service=${claExternalIDService()}".toString()
 
-	logger.info("[{}]",principal)
-	logger.info("[{}]",attributes)
-	logger.info("[{}]",requestContext)
-	logger.info("[{}]",registeredService)
+    def interrupt_cla = new InterruptResponse("", [claExternalID : redirect_url], !block(), !ssoEnabled())
+    interrupt_cla.setAutoRedirect(true)
+    return interrupt_cla
+}
 
-	String sub = ''
-	if (service != null) {
-		if(service.getAttributes().get("principal"))
-			sub=service.getAttributes().get("principal").toString().replace("[","").replace("]","")
-		else if(principal.getAttributes().get("sub"))
-			sub=principal.getAttributes().get("sub").toString().replace("[","").replace("]","")
-		logger.info("[{}]",service)
-	}
+def onlyFranceConnectSub(conf, logger, service, principal, attributes, session) {
+    logger.info("onlyFranceConnectSub")
 
-	logger.debug("sub = [{}]", sub)
+    def sub = getFirst(attributes, "sub")
+    def given_name = getFirst(attributes, "given_name")
+    def email = getFirst(attributes, "email")
+    def gender = getFirst(attributes, "gender")
+    def family_name = getFirst(attributes, "family_name")
+    logger.warn("birthdate {}", getFirst(attributes, "birthdate"))
+    def birthdate = to_LDAP_generalizedTime(getFirst(attributes, "birthdate"))
 
-	if(!attributes.containsKey("uid") && service) {
+    logger.debug("attributs récupérés de FranceConnect [{}] [{}] [{}] [{}] [{}] [{}]",sub, given_name, email, gender, family_name, birthdate)
 
-			//Implementer le traitement effectué par le module claExternalID
-			def id = attributes.get("sub").toString().replace("[","").replace("]","")
-			def given_name = attributes.get("given_name").toString().replace("[","").replace("]","")
-			def email = attributes.get("email").toString().replace("[","").replace("]","")
-			def gender = attributes.get("gender").toString().replace("[","").replace("]","")
-			def family_name = attributes.get("family_name").toString().replace("[","").replace("]","")
-			String birthdate = attributes.get("birthdate").toString().replace("[","").replace("]","")
+    def civiliteFilter = gender == "MALE" ?
+        "(supannCivilite=M.)" :
+        "(|(supannCivilite=Mlle)(supannCivilite=Mme))"
+    def searchFilter = "(&(up1BirthDay=${birthdate})(up1BirthName=${family_name})(givenName=${given_name})(|(mail=${email})(supannMailPerso=${email}))${civiliteFilter})"
+    
+    def searchRequest = SearchRequest.builder()
+        .dn(conf.baseDn)
+        .filter(searchFilter)
+        .returnAttributes("uid","displayName","sn","givenName","mail","eduPersonAffiliation","memberOf","labeledURI")
+        .sizeLimit(2)
+        .build()
+    def dcf = ldaptive_connection(conf)
+    def response = new SearchOperation(dcf).execute(searchRequest);
 
-			birthdate= getBirthdate(birthdate)
+    logger.debug("resultat du filter {}: [{}]", searchFilter, response)
 
-			logger.debug("[{}] [{}] [{}] [{}] [{}] [{}]",id, given_name, email, gender, family_name, birthdate)
+    if(response.entrySize() == 1) {
+        // on a trouvé dans LDAP un utilisateur correspondant exactement. on appose supannFCSub
+        def entry = response.getEntry()
+        def uid = entry.getAttribute("uid")?.getStringValue()
+        logger.info("LDAP exact match: add supannFCSub {} to {}", sub, uid)
+        // TODO: interdire plusieurs supannFCSub ?
+        ModifyResponse res = add_supannFCSub(conf, dcf, sub, uid)
+        logger.debug("[{}]", res)
 
-			def searchFilter=""
+        logger.info("on ajoute les attributs LDAP aux attributs CAS")
+        for (attr in entry.getAttributes()) {
+            principal.attributes.put(attr.getName(), attr.getStringValues())
+        }
 
-			if(gender.equals("MALE")){
-				searchFilter = "(&(up1BirthDay="+birthdate+")(|(mail="+email+")(supannMailPerso="+email+"))(supannCivilite=M.)(up1BirthName="+family_name+")(givenName="+given_name+"))"
-			  }else{
-				searchFilter = "(&(up1BirthDay="+birthdate+")(|(mail="+email+")(supannMailPerso="+email+"))(|(supannCivilite=Mlle)(supannCivilite=Mme))(up1BirthName="+family_name+")(givenName="+given_name+"))"
-			  }
+        return res.isSuccess() ? 
+            InterruptResponse.none() :  
+            new InterruptResponse("",!block(), !ssoEnabled())
+    } else {
+        logger.info("pas d'utilisateur correspondant dans LDAP")
+        return force_LDAP_login(conf, logger, service, attributes, session)
+    }
+}
 
-			String[] returnAttrs = ["uid","displayName","sn","givenName","mail","eduPersonAffiliation","memberOf","labeledURI"]
+def subInSession_and_ldapInAttrs(conf, logger, service, attributes, session) {
+    logger.info("subInSession_and_ldapInAttrs")
 
-			DefaultConnectionFactory dcf = ldap_connect(ldapUrl, bindDn, bindCredential)
-			Connection connection = dcf.getConnection()
-			def result
+    // on récupère les attributs FC en session
+    def fc_sub = session.getAttribute("sub")
+    def fc_birthdate = to_LDAP_generalizedTime(session.getAttribute("birthdate"))
+    if (!fc_sub) throw new Exception("no sub in session")
+    if (!fc_birthdate) throw new Exception("no birthdate in session")
 
-			try {
-				connection.open()
-				if (connection.isOpen()) {
-					result =  LdapUtils.executeSearchOperation(dcf, baseDn, LdapUtils.newLdaptiveSearchFilter(searchFilter), 10, returnAttrs)
+    // on récupère l'uid dans les attributs de l'auth password LDAP
+    def ldap_uid = getFirst(attributes, "uid")
+    if (!ldap_uid) throw new Exception("no ldap_uid in attributes")
+    logger.debug("ldap_uid [{}]", ldap_uid)
 
-					logger.debug("[{}]",result)
+    def ldap_birthdate = getLDAPUserBirthdate(conf, ldap_uid)
+    if(fc_birthdate != ldap_birthdate) {
+        logger.warn("different birth dates {} != {}", fc_birthdate, ldap_birthdate)
+        return new InterruptResponse("NOT ALLOWED", !block(), !ssoEnabled())
+    }
 
-					if(LdapUtils.containsResultEntry(result)) {
-						//apposition du SUB FC
-						LdapEntry entry = result.getEntry()
-						def uid= LdapUtils.getString(entry, "uid", null)
-						logger.debug("[{}]", uid)
-						ModifyOperation modify = new ModifyOperation(dcf)
-						LdapAttribute attr = new LdapAttribute("supannFCSub", sub);
-						ModifyRequest requestModify = new ModifyRequest("uid="+uid+","+baseDn, new AttributeModification(AttributeModification.Type.ADD, attr))
-						ModifyResponse res = modify.execute(requestModify)
-						logger.debug("[{}]", res)
-						try{
-							for(returnAttr in returnAttrs)
-								  principal.attributes.put(returnAttr,[LdapUtils.getString(entry, returnAttr, null)])
-						}catch(NullPointerException e){ logger.error("[{}]", e.getMessage())}
-						if(res.isSuccess()) {
-							return new InterruptResponse("", block, ssoEnabled)
-						}
-					}else {
-						session.setAttribute("sub", sub);
-						session.setAttribute("target", service.getId());
-						session.setAttribute("given_name", given_name);
-						session.setAttribute("email", email);
-						session.setAttribute("gender", gender);
-						session.setAttribute("family_name", family_name);
-						session.setAttribute("birthdate", birthdate);
-						logger.debug("Session Object [{}]", session.getAttributeNames())
-						def e = session.getAttributeNames()
-						while(e.hasMoreElements()){
-							logger.debug("Session attribute name [{}]", e.nextElement());
-						}
-						InterruptResponse interrupt_cla = new InterruptResponse("",[claExternalID  : cas_prefix_name+"/login?service=https://localhost/claExternalID/associate"], !block, !ssoEnabled)
-						interrupt_cla.setAutoRedirect(true)
-						return interrupt_cla
-					}
-				}
-			}catch(LdapException e) {
-					logger.error("[{}]", e.getMessage())
-			}
-			connection.close()
-			return new InterruptResponse("",!block, !ssoEnabled)
-	}else if (registeredService) {
-		if(registeredService.getName().equals("Bonjour")) {
-			def e = session.getAttributeNames()
-			while(e.hasMoreElements()){
-				String attributeName=e.nextElement()
-				logger.debug("Session attribute name [{}={}]", attributeName,session.getAttribute(attributeName))
-			}
+    // => apposition du SUB FC
+    def dcf = ldaptive_connection(conf)
+    logger.info("User logged both FC & LDAP: add supannFCSub {} to {}", fc_sub, ldap_uid)
+    // TODO: interdire plusieurs supannFCSub ?
+    ModifyResponse res = add_supannFCSub(conf, dcf, fc_sub, ldap_uid)
+    logger.debug("[{}]", res)
 
-			def fc_sub =  session.getAttribute("sub")
-			def fc_family_name = session.getAttribute("family_name")
-			def fc_birthdate = session.getAttribute("birthdate")
-			def ldap_uid = attributes.get("uid").toString().replace("[","").replace("]","")
-			logger.debug("[{}]", ldap_uid)
-			def ldap_birthdate = getLDAPUserBirthdate(ldapUrl, bindDn, baseDn,  bindCredential, ldap_uid)
+    if(res.isSuccess()) {
+        def serviceInitial = session.getAttribute("target")
+        logger.info("on remplace le faux service ${claExternalIDService()} par le service initial ${serviceInitial}")
+        // on remplace le faux service claExternalIDService par le service initial
+        service.setId(serviceInitial)
+        service.setOriginalUrl(serviceInitial)
 
-			service.setId(session.getAttribute("target"))
-			service.setOriginalUrl(session.getAttribute("target"))
+        return InterruptResponse.none()
+    }
+    return new InterruptResponse("", !block(), !ssoEnabled())
+}
 
-			if(fc_birthdate.equals(ldap_birthdate)) {
-				DefaultConnectionFactory dcf = ldap_connect(ldapUrl, bindDn, bindCredential)
-				Connection connection = dcf.getConnection()
-				try {
-					connection.open()
-					if (connection.isOpen()) {
-						def uid = attributes.get("uid").toString().replace("[","").replace("]","")
-						logger.debug("[{}]", uid)
-						ModifyOperation modify = new ModifyOperation(dcf)
-						LdapAttribute attr = new LdapAttribute("supannFCSub", fc_sub);
-						ModifyRequest requestModify = new ModifyRequest("uid="+uid+","+baseDn, new AttributeModification(AttributeModification.Type.ADD, attr))
-						ModifyResponse res = modify.execute(requestModify)
-						logger.debug("[{}]", res)
-						logger.debug("[{}]", service)
-						if(res.isSuccess()) {
-							InterruptResponse interrupt =  new InterruptResponse("", block, ssoEnabled)
-							return interrupt
-						}
-					}
-				}catch(LdapException ex) {
-					logger.error("[{}]", ex.getMessage())
-				}
-				return new InterruptResponse("", !block, !ssoEnabled)
-			}else {
-				return new InterruptResponse("NOT ALLOWED", !block, !ssoEnabled)
-			}
-		}else { return InterruptResponse.none() }
-	} else {
-		return InterruptResponse.none()
-	}
+def get_conf(CasConfigurationProperties props) {
+    return [
+        ldapUrl: props.getAuthn().getLdap().get(0).getLdapUrl(),
+        baseDn: props.getAuthn().getLdap().get(0).getBaseDn(),
+        bindDn: props.getCustom().getProperties().get("claExternalID-ldap-bindDn"),
+        bindCredential: props.getCustom().getProperties().get("claExternalID-ldap-bindCredential"),
+        cas_prefix_name: props.getServer().getPrefix().toString(),
+    ]
+}
+
+// NB: "service" est l'object correspondant au query param "service=xxx"
+// NB: "registeredService" est l'entrée dans etc/cas/services/xxx correspondant au service demandé
+def run(principal, attributes, service, registeredService, requestContext, logger, ...other_args) {
+    try {
+        final def session = ((HttpServletRequest)requestContext.getExternalContext().getNativeRequest()).getSession()
+        final def props = requestContext.getActiveFlow().getApplicationContext().getBean(CasConfigurationProperties.class);
+        final def conf = get_conf(props)
+
+        logger.info("principal : [{}]", principal)
+        logger.info("attributes : [{}]", attributes)
+        //logger.info("service [{}]",service.originalUrl)
+        //logger.info("registeredService : [{}]",registeredService)
+        //logger.info("requestContext : [{}]",requestContext)
+        logger.debug("attribute sub = [{}]", getFirst(attributes, "sub"))
+        logger.info("session id = {}", session.getId())
+        logger.info("session sub = {}", session.getAttribute("sub"))
+
+        if (!service) {
+            // on ne fait rien si pas de service (pour debug??)
+            return InterruptResponse.none()
+        } else if (service.originalUrl == 'http://localhost/integration-tests-cas-server/cleanup') {
+            removeTestsFcSub(conf)
+            return new InterruptResponse("test", !block(), !ssoEnabled())
+        } else if (service.originalUrl == claExternalIDService()) {
+            return subInSession_and_ldapInAttrs(conf, logger, service, attributes, session)
+        } else if (getFirst(attributes, "uid")) {
+            // soit l'utilisateur s'est authentifié sur LDAP, soit il s'est authentifié sur FranceConnect et le "sub" a été trouvé dans LDAP
+            logger.debug("we have uid, no interrupt needed")
+            return InterruptResponse.none()
+        } else if (getFirst(attributes, "sub") && !getFirst(attributes, "uid")) {
+            return onlyFranceConnectSub(conf, logger, service, principal, attributes, session)
+        } else {
+            throw new Exception("no sub nor uid")
+        }
+    } catch (err) {
+        // NB par défaut les msg d'erreur ne sont pas loggués par CAS. On le fait explicitement et avec ce qui est utile :
+        logger.error("{}", err.getMessage())
+        for (def trace: err.getStackTrace()) {
+            if (trace.getFileName()?.endsWith(".groovy"))
+                logger.error("  {}", trace)
+        }
+    }
 }
