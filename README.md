@@ -31,7 +31,6 @@ Fichier claExternalID_Associate-55.json
   "@class" : "org.apereo.cas.services.RegexRegisteredService",
   "serviceId" : "https://localhost/claExternalID/associate",
   "name" : "Bonjour",
-  "theme": "theme_apres_FranceConnect",
   "id" : 55,
   "description" : "Nous n'avons pas réussi à vous retrouver parmi nos utilisateurs.\nSi vous êtes étudiant ou personnel de l'université Paris 1 Panthéon-Sorbonne, veuillez vous authentifier. Cette opération est à réaliser une fois.\nSi vous n'êtes pas étudiant ou personnel de Paris 1, vous n'êtes pas autorisé à accéder à ce service. Veuillez cliquer sur \"Annuler\" pour vous déconnecter de FranceConnect",
   "evaluationOrder" : 55,
@@ -44,7 +43,11 @@ Fichier claExternalID_Associate-55.json
      "requiredAttributes" : {
 	    "@class" : "java.util.HashMap",
 	    "uid" : [ "java.util.HashSet", [ ".*" ] ]
-     }
+     },
+     "delegatedAuthenticationPolicy" : {
+        "@class" : "org.apereo.cas.services.DefaultRegisteredServiceDelegatedAuthenticationPolicy",
+        "allowedProviders" : [ "java.util.ArrayList", ["AUCUN"] ]
+     }     
   }
 }
 ```
