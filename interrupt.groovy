@@ -45,10 +45,16 @@ DefaultConnectionFactory ldaptive_connection(conf) {
 	return new DefaultConnectionFactory(cc)
 }
 
-ModifyResponse add_supannFCSub(conf, dcf, String fc_sub, String ldap_uid) {
-    def requestModify = 
-        new ModifyRequest("uid=${ldap_uid},${conf.baseDn}", 
-            new AttributeModification(AttributeModification.Type.ADD, new LdapAttribute("supannFCSub", fc_sub)))
+ModifyResponse add_supannFCSub(conf, dcf, String fc_sub, String ldap_uid, logger, boolean activateAccountStatus = false) {
+    def modifications = []
+    modifications << new AttributeModification(AttributeModification.Type.ADD, new LdapAttribute("supannFCSub", fc_sub))
+        
+    if(activateAccountStatus) {
+        logger.debug("on ajoute l'attribut LDAP accountStatus avec la valeur 'active'")
+        modifications << new AttributeModification(AttributeModification.Type.ADD, new LdapAttribute("accountStatus", "active"))
+    }
+    
+    def requestModify = new ModifyRequest("uid=${ldap_uid},${conf.baseDn}", modifications.toArray(new AttributeModification[0]))
     return new ModifyOperation(dcf).execute(requestModify)
 }
 
@@ -104,20 +110,23 @@ def onlyFranceConnectSub(conf, logger, service, principal, attributes, session) 
     def email = getFirst(attributes, "email")
     def gender = getFirst(attributes, "gender")
     def family_name = getFirst(attributes, "family_name")
-    logger.warn("birthdate {}", getFirst(attributes, "birthdate"))
+    logger.debug("birthdate {}", getFirst(attributes, "birthdate"))
     def birthdate = to_LDAP_generalizedTime(getFirst(attributes, "birthdate"))
 
-    logger.debug("attributs récupérés de FranceConnect [{}] [{}] [{}] [{}] [{}] [{}]",sub, given_name, email, gender, family_name, birthdate)
+    logger.info("attributs récupérés de FranceConnect [{}] [{}] [{}] [{}] [{}] [{}]",sub, given_name, email, gender, family_name, birthdate)
 
     def civiliteFilter = gender == "MALE" ?
         "(supannCivilite=M.)" :
         "(|(supannCivilite=Mlle)(supannCivilite=Mme))"
-    def searchFilter = "(&(up1BirthDay=${birthdate})(up1BirthName=${family_name})(givenName=${given_name})(|(mail=${email})(supannMailPerso=${email}))${civiliteFilter})"
+    
+    def statusFilter = "(|(accountStatus=active)(!(accountStatus=*)))"
+        
+    def searchFilter = "(&(up1BirthDay=${birthdate})(up1BirthName=${family_name})(givenName=${given_name})(|(mail=${email})(supannMailPerso=${email}))${civiliteFilter}${statusFilter})"
     
     def searchRequest = SearchRequest.builder()
         .dn(conf.baseDn)
         .filter(searchFilter)
-        .returnAttributes("uid","displayName","sn","givenName","mail","eduPersonAffiliation","memberOf","labeledURI")
+        .returnAttributes("uid","displayName","sn","givenName","mail","eduPersonAffiliation","memberOf","labeledURI","accountStatus")
         .sizeLimit(2)
         .build()
     def dcf = ldaptive_connection(conf)
@@ -130,11 +139,15 @@ def onlyFranceConnectSub(conf, logger, service, principal, attributes, session) 
         def entry = response.getEntry()
         def uid = entry.getAttribute("uid")?.getStringValue()
         logger.info("LDAP exact match: add supannFCSub {} to {}", sub, uid)
+        
+        def isActive = entry.getAttribute("accountStatus")?.getStringValue().equals("active")
+        logger.debug("isActive : {}", isActive)
+        
         // TODO: interdire plusieurs supannFCSub ?
-        ModifyResponse res = add_supannFCSub(conf, dcf, sub, uid)
+        ModifyResponse res = add_supannFCSub(conf, dcf, sub, uid, logger, !isActive)
         logger.debug("[{}]", res)
 
-        logger.info("on ajoute les attributs LDAP aux attributs CAS")
+        logger.debug("on ajoute les attributs LDAP aux attributs CAS")
         for (attr in entry.getAttributes()) {
             principal.attributes.put(attr.getName(), attr.getStringValues())
         }
@@ -172,7 +185,7 @@ def subInSession_and_ldapInAttrs(conf, logger, service, attributes, session) {
     def dcf = ldaptive_connection(conf)
     logger.info("User logged both FC & LDAP: add supannFCSub {} to {}", fc_sub, ldap_uid)
     // TODO: interdire plusieurs supannFCSub ?
-    ModifyResponse res = add_supannFCSub(conf, dcf, fc_sub, ldap_uid)
+    ModifyResponse res = add_supannFCSub(conf, dcf, fc_sub, ldap_uid, logger)
     logger.debug("[{}]", res)
 
     if(res.isSuccess()) {
@@ -189,7 +202,7 @@ def subInSession_and_ldapInAttrs(conf, logger, service, attributes, session) {
 
 def get_conf(CasConfigurationProperties props) {
     return [
-        ldapUrl: props.getAuthn().getLdap().get(0).getLdapUrl(),
+        ldapUrl: props.getCustom().getProperties().get("claExternalID-ldap-ldapUrl"),
         baseDn: props.getAuthn().getLdap().get(0).getBaseDn(),
         bindDn: props.getCustom().getProperties().get("claExternalID-ldap-bindDn"),
         bindCredential: props.getCustom().getProperties().get("claExternalID-ldap-bindCredential"),
@@ -205,14 +218,14 @@ def run(principal, attributes, service, registeredService, requestContext, logge
         final def props = requestContext.getActiveFlow().getApplicationContext().getBean(CasConfigurationProperties.class);
         final def conf = get_conf(props)
 
-        logger.info("principal : [{}]", principal)
-        logger.info("attributes : [{}]", attributes)
+        logger.debug("principal : [{}]", principal)
+        logger.debug("attributes : [{}]", attributes)
         //logger.info("service [{}]",service.originalUrl)
         //logger.info("registeredService : [{}]",registeredService)
         //logger.info("requestContext : [{}]",requestContext)
         logger.debug("attribute sub = [{}]", getFirst(attributes, "sub"))
-        logger.info("session id = {}", session.getId())
-        logger.info("session sub = {}", session.getAttribute("sub"))
+        logger.debug("session id = {}", session.getId())
+        logger.debug("session sub = {}", session.getAttribute("sub"))
 
         if (!service) {
             // on ne fait rien si pas de service (pour debug??)
@@ -229,6 +242,7 @@ def run(principal, attributes, service, registeredService, requestContext, logge
         } else if (getFirst(attributes, "sub") && !getFirst(attributes, "uid")) {
             return onlyFranceConnectSub(conf, logger, service, principal, attributes, session)
         } else {
+            logger.warn("no sub nor uid in [{}] [{}]", principal, attributes)
             throw new Exception("no sub nor uid")
         }
     } catch (err) {
