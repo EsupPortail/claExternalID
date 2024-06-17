@@ -3,7 +3,7 @@ claExternalID (CAS LDAP Associate External ID) est un outil qui permet d'enregis
 
 ## Intégration dans CAS
 
-Vous aurez besoin de placer le script groovy à l'emplacement suivant : **$CAS_HOME/etc/cas/config/mon_script.groovy**
+Vous aurez besoin de placer le script groovy à l'emplacement suivant : **$CAS_HOME/etc/cas/config/interrupt.groovy**
 
 et d'ajouter la propriéte suivante dans le fichier de propriété de CAS :
 
