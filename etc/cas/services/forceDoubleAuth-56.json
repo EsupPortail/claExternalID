@@ -1,0 +1,23 @@
+{
+  "@class" : "org.apereo.cas.services.CasRegisteredService",
+  "serviceId" : "https://localhost/forceDoubleAuth",
+  "name" : "forceDoubleAuth",
+  "id" : 56,
+  "description" : "Double authentification nécessaire pour la réinit de 2ème facteur",
+  "evaluationOrder" : 56,
+  "usernameAttributeProvider" : {
+    "@class" : "org.apereo.cas.services.PrincipalAttributeRegisteredServiceUsernameProvider",
+    "usernameAttribute" : "uid"
+  },
+  "accessStrategy": {
+     "@class" : "org.apereo.cas.services.DefaultRegisteredServiceAccessStrategy",
+     "requiredAttributes" : {
+	    "@class" : "java.util.HashMap",
+	    "uid" : [ "java.util.HashSet", [ ".*" ] ]
+     },
+     "delegatedAuthenticationPolicy" : {
+        "@class" : "org.apereo.cas.services.DefaultRegisteredServiceDelegatedAuthenticationPolicy",
+        "allowedProviders" : [ "java.util.ArrayList", ["AUCUN"] ]
+     }     
+  }
+}

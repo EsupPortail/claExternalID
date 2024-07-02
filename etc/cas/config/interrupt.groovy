@@ -12,6 +12,7 @@ import org.ldaptive.ConnectionInitializer
 import org.ldaptive.SearchOperation
 import org.ldaptive.SearchRequest
 import org.apereo.cas.configuration.CasConfigurationProperties
+import org.springframework.web.util.UriComponentsBuilder
 
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -19,9 +20,22 @@ import java.time.Duration
 import jakarta.servlet.http.HttpServletRequest
 
 
+def forceDoubleAuthService() { return "https://localhost/forceDoubleAuth" }
 def claExternalIDService() { return "https://localhost/claExternalID/associate" }
 def block() { return false }
 def ssoEnabled() { return true }
+
+def cas_otp_login_url() { return "https://cas-test.univ-paris1.fr/otp/login" }
+def otp_service(logger, service) {
+    if (!service.originalUrl.startsWith(cas_otp_login_url())) return null
+
+    def otp_service = URLDecoder.decode(UriComponentsBuilder.fromUriString(service.originalUrl).build().getQueryParams().getFirst("service"))
+    logger.debug("otp_service [{}]", otp_service)
+    return otp_service
+}
+def should_force_password_auth_after_FC_auth(logger, service) {
+    return otp_service(logger, service) == 'https://otpmanager-test.univ-paris1.fr/login?force_FC_double_auth=true'
+}
 
 String getFirst(Object attributes, String name) {
     def vals = attributes.get(name)
@@ -82,22 +96,22 @@ def removeTestsFcSub(conf) {
     remove_supannFCSub(conf, dcf, "ced88a7b04db5c2e2aefa09ac11966ce8f70502dcc40651b2d74e52fe49b97dfv1", "pldupont")
 }
 
-def force_LDAP_login(conf, logger, service, attributes, session) {
+def force_LDAP_login(conf, logger, target_service, special_service, attributes, session) {
 
     logger.info("on sauvegarde les infos FranceConnect en session")
-    session.setAttribute("target", service.getId());
-    for (def attr in ["sub", "birthdate"]) {
+    session.setAttribute("target", target_service.getId());
+    for (def attr in ["sub", "birthdate", "uid"]) {
         session.setAttribute(attr, getFirst(attributes, attr));
     }
 
-    // => on force un cas/login avec le service claExternalID (donc avec FranceConnect non autorisé)
+    // => on force un cas/login avec le service claExternalID ou forceDoubleAuth (donc avec FranceConnect non autorisé)
     // NB : le service https://localhost/claExternalID/associate n'est jamais atteint
-    logger.info("on force cas/login avec le service claExternalID")
+    logger.info("on force cas/login avec le service " + special_service)
 
     // NB: convert from GString to String
-    def redirect_url = "${conf.cas_prefix_name}/login?service=${claExternalIDService()}".toString()
+    def redirect_url = "${conf.cas_prefix_name}/login?service=${special_service}".toString()
 
-    def interrupt_cla = new InterruptResponse("", [claExternalID : redirect_url], !block(), !ssoEnabled())
+    def interrupt_cla = new InterruptResponse("", [special_service : redirect_url], !block(), !ssoEnabled())
     interrupt_cla.setAutoRedirect(true)
     return interrupt_cla
 }
@@ -156,13 +170,24 @@ def onlyFranceConnectSub(conf, logger, service, principal, attributes, session) 
             InterruptResponse.none() :  
             new InterruptResponse("",!block(), !ssoEnabled())
     } else {
-        logger.info("pas d'utilisateur correspondant dans LDAP")
-        return force_LDAP_login(conf, logger, service, attributes, session)
+        logger.info("pas d'utilisateur correspondant à {} dans LDAP", sub)
+        return force_LDAP_login(conf, logger, service, claExternalIDService(), attributes, session)
     }
 }
 
-def subInSession_and_ldapInAttrs(conf, logger, service, attributes, session) {
+def subInSession_and_ldapInAttrs(conf, logger, service, principal, attributes, session) {
     logger.info("subInSession_and_ldapInAttrs")
+    if (session.getAttribute("uid")) {
+        // le service a demandé une double auth qui n'était pas nécessaire pour le rapprochement
+        
+        def fc_auth_uid = session.getAttribute("uid")
+        def password_auth_uid = getFirst(attributes, "uid")
+        if (fc_auth_uid != password_auth_uid) {
+            logger.warn("different uid for FC auth & password auth {} != {}", fc_auth_uid, password_auth_uid)
+            return new InterruptResponse("Comptes différents", !block(), !ssoEnabled())
+        }
+        return redirect_to_initial_service(logger, service, principal, session)
+    }
 
     // on récupère les attributs FC en session
     def fc_sub = session.getAttribute("sub")
@@ -177,8 +202,15 @@ def subInSession_and_ldapInAttrs(conf, logger, service, attributes, session) {
 
     def ldap_birthdate = getLDAPUserBirthdate(conf, ldap_uid)
     if(fc_birthdate != ldap_birthdate) {
-        logger.warn("different birth dates {} != {}", fc_birthdate, ldap_birthdate)
-        return new InterruptResponse("NOT ALLOWED", !block(), !ssoEnabled())
+        logger.warn("different birth dates {} != {} for {} / {}", fc_birthdate, ldap_birthdate, fc_sub, ldap_uid)
+        return new InterruptResponse("""
+            La date de naissance provenant de France Connect ne correspond pas à l'utilisateur.
+            <br>
+            <br>       
+            Vous ne pouvez pas vous connecter avec FranceConnect.
+            <br>
+            Veuillez vous rapprocher de votre secrétariat pédagogique (pour les étudiants) ou de la DRH (pour les personnels) pour faire corriger vos données personnelles. Sinon, contactez <a href="https://app.franceconnect.gouv.fr/support/formulaire/faq/contact">FranceConnect</a> si ce sont vos données d'état civil envoyées par FranceConnect qui sont erronées.
+        """, !block(), !ssoEnabled())
     }
 
     // => apposition du SUB FC
@@ -189,15 +221,22 @@ def subInSession_and_ldapInAttrs(conf, logger, service, attributes, session) {
     logger.debug("[{}]", res)
 
     if(res.isSuccess()) {
+        return redirect_to_initial_service(logger, service, principal, session)
+    }
+    return new InterruptResponse("", !block(), !ssoEnabled())
+}
+
+def redirect_to_initial_service(logger, service, principal, session) {
         def serviceInitial = session.getAttribute("target")
         logger.info("on remplace le faux service ${claExternalIDService()} par le service initial ${serviceInitial}")
         // on remplace le faux service claExternalIDService par le service initial
         service.setId(serviceInitial)
         service.setOriginalUrl(serviceInitial)
 
+        // en cas de double auth, on stocke dans "first_clientName" la 1ere auth. CAS fournit dans "clientName" la 2eme auth
+        principal.attributes.put("first_clientName", "FranceConnect")
+
         return InterruptResponse.none()
-    }
-    return new InterruptResponse("", !block(), !ssoEnabled())
 }
 
 def get_conf(CasConfigurationProperties props) {
@@ -233,8 +272,11 @@ def run(principal, attributes, service, registeredService, requestContext, logge
         } else if (service.originalUrl == 'http://localhost/integration-tests-cas-server/cleanup') {
             removeTestsFcSub(conf)
             return new InterruptResponse("test", !block(), !ssoEnabled())
-        } else if (service.originalUrl == claExternalIDService()) {
-            return subInSession_and_ldapInAttrs(conf, logger, service, attributes, session)
+        } else if (service.originalUrl == claExternalIDService() || service.originalUrl == forceDoubleAuthService()) {
+            return subInSession_and_ldapInAttrs(conf, logger, service, principal, attributes, session)
+l        } else if (getFirst(attributes, "sub") && should_force_password_auth_after_FC_auth(logger, service)) {
+            logger.info("authentifié sur FranceConnect et le service demande une double auth [{}] [{}]", service.originalUrl)
+            return force_LDAP_login(conf, logger, service, forceDoubleAuthService(), attributes, session)
         } else if (getFirst(attributes, "uid")) {
             // soit l'utilisateur s'est authentifié sur LDAP, soit il s'est authentifié sur FranceConnect et le "sub" a été trouvé dans LDAP
             logger.debug("we have uid, no interrupt needed")

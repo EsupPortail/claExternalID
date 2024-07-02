@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    html {
+        font-family: Arial;
+        color: #00386E;       
+    }
+    h1 {
+        text-align: center;
+    }
+    .content {
+        margin: 2rem auto 0;
+        max-width: 600px;
+    }    
+    ul {
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    li {
+      margin: 1.5rem 0 0.5rem;
+      list-style-type: none;
+    }
+    button {
+        width: 100%;
+        padding: 1rem;
+        border: 3px solid;
+        border-radius: 4px;
+        border-color: lightgray;
+    }
+    button:not([disabled]) {
+        color: #00386E;       
+        border-color: #00386E;
+        background: #ED9B27;        
+    }
+
+  </style>    
+  <title>Réinitialiser vos paramètres OTP via FranceConnect</title>
+</head>
+<body>
+    <script> window.bandeau_anonyme = {}; </script>
+    <script src="https://ent-test.univ-paris1.fr/assets/bandeau-anonyme/loader.js"></script>
+
+    <iframe style="display: none"></iframe>
+    <script>
+        function logout() {
+            document.querySelector('iframe').src = "/otp/logout?noservice"
+            document.querySelector("#logout_text button").disabled = true
+            document.querySelector("#logout_text span").style.visibility = "visible"
+            document.querySelector("#to_FC button").disabled = false
+        }
+        function redirect() {
+            document.location = '/cas/clientredirect?client_name=FranceConnect&service=https%3A%2F%2Fcas-test.univ-paris1.fr%2Fotp%2Flogin-67301524944f53233aacf41081e59164%3Fservice%3Dhttps%253A%252F%252Fotpmanager-test.univ-paris1.fr%252Flogin%253Fforce_FC_double_auth%253Dtrue%26auth_checked'            
+        }
+    </script>
+    <div class="content">
+        <h1>Réinitialiser vos paramètres d'authentification renforcée via FranceConnect</h1>
+    
+        Pour votre permettre de réinitialiser vos paramètres d'authentification renforcée,   
+        nous vous proposons une double connection FranceConnect et mot de passe Paris 1 Panthéon-Sorbonne.
+    
+        <ul>
+            <li id="logout_text">
+                <button onclick="logout()" href="#">Veuillez cliquer ici pour vous déconnecter</button>
+                <span style="visibility: hidden;">déconnecté !</span>
+            </li>
+            <li id="to_FC"><button disabled onclick="redirect()">Puis continuer vers FranceConnect</button></li>
+        </ul>
+    </div>
+    
+     
+    
+</body>
+</html>
