@@ -129,18 +129,22 @@ def onlyFranceConnectSub(conf, logger, service, principal, attributes, session) 
 
     logger.info("attributs récupérés de FranceConnect [{}] [{}] [{}] [{}] [{}] [{}]",sub, given_name, email, gender, family_name, birthdate)
 
+    def birthdateFilter = "(up1BirthDay=${birthdate})"
+    def familyNameFilter = "(up1BirthName=${family_name})"
+
     def givenNameFilter = "(|(givenName=${given_name})" // givenNameFilter = "(|(givenName=Paul Louis)"
     given_name.split().each { givenNameFilter +=  "(givenName=${it})"} // givenNameFilter = "(|(givenName=Paul Louis)(givenName=Paul)(givenName=Louis)"
     givenNameFilter += ")" // givenNameFilter = "(|(givenName=Paul Louis)(givenName=Paul)(givenName=Louis))"
 
+    def mailFilter = "(|(mail=${email})(supannMailPerso=${email}))"
     def civiliteFilter = gender == "MALE" ?
         "(supannCivilite=M.)" :
         "(|(supannCivilite=Mlle)(supannCivilite=Mme))"
-    
+
     def statusFilter = "(|(accountStatus=active)(!(accountStatus=*)))"
 
-    def searchFilter = "(&(up1BirthDay=${birthdate})(up1BirthName=${family_name})${givenNameFilter}(|(mail=${email})(supannMailPerso=${email}))${civiliteFilter}${statusFilter})"
-    
+    def searchFilter = "(&${birthdateFilter}${familyNameFilter}${givenNameFilter}${mailFilter}${civiliteFilter}${statusFilter})"
+
     def searchRequest = SearchRequest.builder()
         .dn(conf.baseDn)
         .filter(searchFilter)
