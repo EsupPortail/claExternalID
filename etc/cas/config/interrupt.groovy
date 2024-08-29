@@ -129,13 +129,17 @@ def onlyFranceConnectSub(conf, logger, service, principal, attributes, session) 
 
     logger.info("attributs récupérés de FranceConnect [{}] [{}] [{}] [{}] [{}] [{}]",sub, given_name, email, gender, family_name, birthdate)
 
+    def givenNameFilter = "(|(givenName=${given_name})" // givenNameFilter = "(|(givenName=Paul Louis)"
+    given_name.split().each { givenNameFilter +=  "(givenName=${it})"} // givenNameFilter = "(|(givenName=Paul Louis)(givenName=Paul)(givenName=Louis)"
+    givenNameFilter += ")" // givenNameFilter = "(|(givenName=Paul Louis)(givenName=Paul)(givenName=Louis))"
+
     def civiliteFilter = gender == "MALE" ?
         "(supannCivilite=M.)" :
         "(|(supannCivilite=Mlle)(supannCivilite=Mme))"
     
     def statusFilter = "(|(accountStatus=active)(!(accountStatus=*)))"
-        
-    def searchFilter = "(&(up1BirthDay=${birthdate})(up1BirthName=${family_name})(givenName=${given_name})(|(mail=${email})(supannMailPerso=${email}))${civiliteFilter}${statusFilter})"
+
+    def searchFilter = "(&(up1BirthDay=${birthdate})(up1BirthName=${family_name})${givenNameFilter}(|(mail=${email})(supannMailPerso=${email}))${civiliteFilter}${statusFilter})"
     
     def searchRequest = SearchRequest.builder()
         .dn(conf.baseDn)
