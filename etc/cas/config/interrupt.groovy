@@ -132,9 +132,9 @@ def onlyFranceConnectSub(conf, logger, service, principal, attributes, session) 
     def birthdateFilter = "(up1BirthDay=${birthdate})"
     def familyNameFilter = "(|(sn=${family_name})(up1BirthName=${family_name}))"
 
-    def givenNameFilter = "(|(givenName=${given_name})" // givenNameFilter = "(|(givenName=Paul Louis)"
-    given_name.split().each { givenNameFilter +=  "(givenName=${it})"} // givenNameFilter = "(|(givenName=Paul Louis)(givenName=Paul)(givenName=Louis)"
-    givenNameFilter += ")" // givenNameFilter = "(|(givenName=Paul Louis)(givenName=Paul)(givenName=Louis))"
+    def givenNameFilter = "(|(supannPrenomsEtatCivil=${given_name})(givenName=${given_name})" // givenNameFilter = "(|(supannPrenomsEtatCivil=Paul Louis)(givenName=Paul Louis)"
+    given_name.split().each { givenNameFilter +=  "(givenName=${it})"} // givenNameFilter = "(|(supannPrenomsEtatCivil=Paul Louis)(givenName=Paul Louis)(givenName=Paul)(givenName=Louis)"
+    givenNameFilter += ")" // givenNameFilter = "(|(supannPrenomsEtatCivil=Paul Louis)(givenName=Paul Louis)(givenName=Paul)(givenName=Louis))"
 
     def mailFilter = "(|(mail=${email})(supannMailPerso=${email}))"
     def civiliteFilter = gender == "MALE" ?
