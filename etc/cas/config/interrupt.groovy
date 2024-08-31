@@ -236,7 +236,7 @@ def subInSession_and_ldapInAttrs(conf, logger, service, principal, attributes, s
 
 def redirect_to_initial_service(logger, service, principal, session) {
         def serviceInitial = session.getAttribute("target")
-        logger.info("on remplace le faux service ${claExternalIDService()} par le service initial ${serviceInitial}")
+        logger.info("on remplace le faux service ${service.originalUrl} par le service initial ${serviceInitial}")
         // on remplace le faux service claExternalIDService par le service initial
         service.setId(serviceInitial)
         service.setOriginalUrl(serviceInitial)
