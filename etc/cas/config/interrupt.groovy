@@ -229,9 +229,29 @@ def subInSession_and_ldapInAttrs(conf, logger, service, principal, attributes, s
     logger.debug("[{}]", res)
 
     if(res.isSuccess()) {
+        if(service.originalUrl == claExternalIDService()) {
+            log_manual_reconciliation(conf, logger, ldap_uid)
+        }
+        
         return redirect_to_initial_service(logger, service, principal, session)
     }
     return new InterruptResponse("", !block(), !ssoEnabled())
+}
+
+def log_manual_reconciliation(conf, logger, uid) {
+    def searchRequest = SearchRequest.builder()
+        .dn(conf.baseDn)
+        .filter("(uid=${uid})")
+        .returnAttributes("uid", "supannFCSub", "sn", "up1BirthName", "supannPrenomsEtatCivil", "givenName", "mail", "supannMailPerso", "supannCivilite", "accountStatus")
+        .sizeLimit(2)
+        .build()
+    def response = new SearchOperation(ldaptive_connection(conf)).execute(searchRequest);
+
+    def attributes = response.getEntry()?.getAttributes().stream()
+        .map { attr -> "\"${attr.name}\": \"${attr.stringValue}\"" }
+        .collect(Collectors.joining(", ", "{", "}"))
+    
+    logger.info("Réconciliation manuelle : {}", attributes)
 }
 
 def redirect_to_initial_service(logger, service, principal, session) {
