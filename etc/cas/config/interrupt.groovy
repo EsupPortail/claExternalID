@@ -1,3 +1,4 @@
+import org.apereo.cas.authentication.principal.Service
 import org.apereo.cas.interrupt.InterruptResponse
 
 import org.ldaptive.DefaultConnectionFactory
@@ -7,6 +8,7 @@ import org.ldaptive.ModifyOperation
 import org.ldaptive.ModifyRequest
 import org.ldaptive.ModifyResponse
 import org.ldaptive.LdapAttribute
+import org.ldaptive.LdapEntry
 import org.ldaptive.BindConnectionInitializer
 import org.ldaptive.ConnectionInitializer
 import org.ldaptive.SearchOperation
@@ -16,6 +18,7 @@ import org.springframework.web.util.UriComponentsBuilder
 
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.function.Function
 import java.time.Duration
 import jakarta.servlet.http.HttpServletRequest
 
@@ -35,6 +38,14 @@ def otp_service(logger, service) {
 }
 def should_force_password_auth_after_FC_auth(logger, service) {
     return otp_service(logger, service) == 'https://otpmanager-test.univ-paris1.fr/login?force_FC_double_auth=true'
+}
+
+def isClaExternalIDService(Service service) {
+    return isClaExternalIDService(service.originalUrl)
+}
+
+def isClaExternalIDService(String service) {
+    return service == claExternalIDService()
 }
 
 String getFirst(Object attributes, String name) {
@@ -96,12 +107,38 @@ def removeTestsFcSub(conf) {
     remove_supannFCSub(conf, dcf, "ced88a7b04db5c2e2aefa09ac11966ce8f70502dcc40651b2d74e52fe49b97dfv1", "pldupont")
 }
 
+abstract class AbstractAttributes {
+    AbstractAttributes(Function<String, String> getValue) {
+        this.properties
+            .findAll {!['class', 'active'].contains(it.key)}
+            .each { key, value -> 
+                this."$key" = getValue.apply(key)
+            }
+    }
+}
+
+class FcAttributes extends AbstractAttributes {
+    String sub
+    String given_name
+    String email
+    String gender
+    String family_name
+    String birthdate
+    
+    FcAttributes(Map<String, Object> attributes, Script host) {
+        super({ key -> host.getFirst(attributes, key) })
+    }
+}
+
 def force_LDAP_login(conf, logger, target_service, special_service, attributes, session) {
 
     logger.info("on sauvegarde les infos FranceConnect en session")
     session.setAttribute("target", target_service.getId());
     for (def attr in ["sub", "birthdate", "uid"]) {
         session.setAttribute(attr, getFirst(attributes, attr));
+    }
+    if(isClaExternalIDService(special_service)) {
+        session.setAttribute("fcAttributes", new FcAttributes(attributes, this));
     }
 
     // => on force un cas/login avec le service claExternalID ou forceDoubleAuth (donc avec FranceConnect non autorisé)
@@ -229,8 +266,8 @@ def subInSession_and_ldapInAttrs(conf, logger, service, principal, attributes, s
     logger.debug("[{}]", res)
 
     if(res.isSuccess()) {
-        if(service.originalUrl == claExternalIDService()) {
-            log_manual_reconciliation(conf, logger, ldap_uid)
+        if(isClaExternalIDService(service)) {
+            log_manual_reconciliation(conf, logger, ldap_uid, session.getAttribute("fcAttributes"))
         }
         
         return redirect_to_initial_service(logger, service, principal, session)
@@ -238,7 +275,25 @@ def subInSession_and_ldapInAttrs(conf, logger, service, principal, attributes, s
     return new InterruptResponse("", !block(), !ssoEnabled())
 }
 
-def log_manual_reconciliation(conf, logger, uid) {
+class LdapAttributes extends AbstractAttributes {
+    String uid
+    String supannFCSub
+    String sn
+    String up1BirthName
+    String supannPrenomsEtatCivil
+    String givenName
+    String mail
+    String supannMailPerso
+    String supannCivilite
+    String accountStatus
+    
+    LdapAttributes(LdapEntry entry) {
+        super({ key -> entry.getAttribute(key)?.getStringValue() })
+    }
+}
+
+
+def log_manual_reconciliation(conf, logger, uid, fcAttributes) {
     def searchRequest = SearchRequest.builder()
         .dn(conf.baseDn)
         .filter("(uid=${uid})")
@@ -247,12 +302,52 @@ def log_manual_reconciliation(conf, logger, uid) {
         .build()
     def response = new SearchOperation(ldaptive_connection(conf)).execute(searchRequest);
 
-    def attributes = response.getEntry()?.getAttributes().stream()
-        .map { attr -> "\"${attr.name}\": \"${attr.stringValue}\"" }
-        .collect(Collectors.joining(", ", "{", "}"))
-    
-    logger.info("Réconciliation manuelle : {}", attributes)
+    def ldapAttributes = new LdapAttributes(response.getEntry())
+
+    logger.info("Réconciliation manuelle ${uid}. Attributs LDAP différents de FC : ${compareFcAndLdap(fcAttributes, ldapAttributes)}")
 }
+
+def compareFcAndLdap(fcAttributes, ldapAttributes) {
+    def diff = [:]
+
+    // familyNameFilter = "(|(sn=${family_name})(up1BirthName=${family_name}))"
+    if (fcAttributes.family_name !in [ldapAttributes.sn?.toUpperCase(), ldapAttributes.up1BirthName?.toUpperCase()]) {
+        diff['family_name'] = fcAttributes.family_name
+        diff['sn'] = ldapAttributes.sn
+        diff['up1BirthName'] = ldapAttributes.up1BirthName
+    }
+
+    // givenNameFilter
+    if (!(
+        (fcAttributes.given_name in [ldapAttributes.supannPrenomsEtatCivil, ldapAttributes.givenName])
+     || (ldapAttributes.givenName in fcAttributes.given_name.split())
+    )) {
+        diff['given_name'] = fcAttributes.given_name
+        diff['supannPrenomsEtatCivil'] = ldapAttributes.supannPrenomsEtatCivil
+        diff['givenName'] = ldapAttributes.givenName
+    }
+
+    // mailFilter = "(|(mail=${email})(supannMailPerso=${email}))"
+    if (fcAttributes.email !in [ldapAttributes.mail, ldapAttributes.supannMailPerso]) {
+        diff['email'] = fcAttributes.email
+        diff['mail'] = ldapAttributes.mail
+        diff['supannMailPerso'] = ldapAttributes.supannMailPerso
+    }
+
+    // civiliteFilter
+    if (ldapAttributes.supannCivilite !in (fcAttributes.gender == "MALE" ? ["M."]: ["Mlle", "Mme"])) {
+        diff['gender'] = fcAttributes.gender
+        diff['supannCivilite'] = ldapAttributes.supannCivilite
+    }
+
+    // statusFilter = "(|(accountStatus=active)(!(accountStatus=*)))"
+    if (ldapAttributes.accountStatus !in ["active", "", null]) {
+        diff['accountStatus'] = ldapAttributes.accountStatus
+    }
+
+    return diff
+}
+
 
 def redirect_to_initial_service(logger, service, principal, session) {
         def serviceInitial = session.getAttribute("target")
@@ -300,7 +395,7 @@ def run(principal, attributes, service, registeredService, requestContext, logge
         } else if (service.originalUrl == 'http://localhost/integration-tests-cas-server/cleanup') {
             removeTestsFcSub(conf)
             return new InterruptResponse("test", !block(), !ssoEnabled())
-        } else if (service.originalUrl == claExternalIDService() || service.originalUrl == forceDoubleAuthService()) {
+        } else if (isClaExternalIDService(service) || service.originalUrl == forceDoubleAuthService()) {
             return subInSession_and_ldapInAttrs(conf, logger, service, principal, attributes, session)
 l        } else if (getFirst(attributes, "sub") && should_force_password_auth_after_FC_auth(logger, service)) {
             logger.info("authentifié sur FranceConnect et le service demande une double auth [{}] [{}]", service.originalUrl)
