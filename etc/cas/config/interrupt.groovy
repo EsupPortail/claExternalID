@@ -138,7 +138,12 @@ def force_LDAP_login(conf, logger, target_service, special_service, attributes, 
         session.setAttribute(attr, getFirst(attributes, attr));
     }
     if(isClaExternalIDService(special_service)) {
-        session.setAttribute("fcAttributes", new FcAttributes(attributes, this));
+		try {
+			session.setAttribute("fcAttributes", new FcAttributes(attributes, this));
+		}catch(Exception err) {
+			log_error(err);
+		}
+        
     }
 
     // => on force un cas/login avec le service claExternalID ou forceDoubleAuth (donc avec FranceConnect non autorisé)
@@ -267,7 +272,11 @@ def subInSession_and_ldapInAttrs(conf, logger, service, principal, attributes, s
 
     if(res.isSuccess()) {
         if(isClaExternalIDService(service)) {
-            log_manual_reconciliation(conf, logger, ldap_uid, session.getAttribute("fcAttributes"))
+			try {
+				log_manual_reconciliation(conf, logger, ldap_uid, session.getAttribute("fcAttributes"))
+			}catch(Exception err) {
+				log_error(err);
+			}
         }
         
         return redirect_to_initial_service(logger, service, principal, session)
@@ -412,10 +421,17 @@ l        } else if (getFirst(attributes, "sub") && should_force_password_auth_af
         }
     } catch (err) {
         // NB par défaut les msg d'erreur ne sont pas loggués par CAS. On le fait explicitement et avec ce qui est utile :
-        logger.error("{}", err.getMessage())
-        for (def trace: err.getStackTrace()) {
-            if (trace.getFileName()?.endsWith(".groovy"))
-                logger.error("  {}", trace)
-        }
+        log_error(err);
     }
+}
+
+/**
+ * Par défaut les msg d'erreur ne sont pas loggués par CAS. On le fait explicitement et avec ce qui est utile :
+ */
+def log_error(err) {
+	logger.error("{}", err.getMessage())
+	for (def trace: err.getStackTrace()) {
+		if (trace.getFileName()?.endsWith(".groovy"))
+			logger.error("  {}", trace)
+	}
 }
