@@ -37,7 +37,7 @@ def otp_service(logger, service) {
     return otp_service
 }
 def should_force_password_auth_after_FC_auth(logger, service) {
-    return otp_service(logger, service) == 'https://otpmanager-test.univ-paris1.fr/login?force_FC_double_auth=true'
+    return otp_service(logger, service) == 'https://esup-otp-manager-test.univ-paris1.fr/login?force_FC_double_auth=true'
 }
 
 def isClaExternalIDService(Service service) {
