@@ -407,7 +407,7 @@ def run(principal, attributes, service, registeredService, requestContext, logge
         } else if (isClaExternalIDService(service) || service.originalUrl == forceDoubleAuthService()) {
             return subInSession_and_ldapInAttrs(conf, logger, service, principal, attributes, session)
 l        } else if (getFirst(attributes, "sub") && should_force_password_auth_after_FC_auth(logger, service)) {
-            logger.info("authentifié sur FranceConnect et le service demande une double auth [{}] [{}]", service.originalUrl)
+            logger.info("authentifié sur FranceConnect et le service demande une double auth [{}] [{}]", getFirst(attributes, "sub"), service.originalUrl)
             return force_LDAP_login(conf, logger, service, forceDoubleAuthService(), attributes, session)
         } else if (getFirst(attributes, "uid")) {
             // soit l'utilisateur s'est authentifié sur LDAP, soit il s'est authentifié sur FranceConnect et le "sub" a été trouvé dans LDAP
