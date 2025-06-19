@@ -16,7 +16,7 @@ import org.apereo.cas.configuration.CasConfigurationProperties
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.time.Duration
-import javax.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletRequest
 
 
 def claExternalIDService() { return "https://localhost/claExternalID/associate" }
