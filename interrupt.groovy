@@ -1,0 +1,1 @@
+etc/cas/config/interrupt.groovy
