@@ -1,3 +1,4 @@
 target
 logs
 src/main/webapp/WEB-INF/config.json
+/.project
