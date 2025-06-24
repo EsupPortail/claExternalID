@@ -1,102 +1,71 @@
 # claExternalID
-claExternalID (CAS LDAP Associate External ID) est un outil qui permet d'enregistrer un identifiant externe sur le profil LDAP d'un utilisateur authentifié avec CAS.
+claExternalID (CAS LDAP Associate External ID) est un outil qui permet d'enregistrer un identifiant externe sur le profil LDAP d'un utilisateur authentifié avec Apereo CAS.
 
-## Intégration dans CAS
+## Intégration dans Apereo CAS
 
-Vous aurez besoin de placer le script groovy à l'emplacement suivant : **$CAS_HOME/etc/cas/config/interrupt.groovy**
+Vous aurez besoin de :
+- Placer [le script groovy](./etc/cas/config/interrupt.groovy) à l'emplacement suivant : **etc/cas/config/interrupt.groovy**
 
-et d'ajouter la propriéte suivante dans le fichier de propriété de CAS :
-
-```
-cas.interrupt.groovy.location=$CAS_HOME/etc/cas/config/interrupt.groovy
-```
-
-Comme vous aurez aussi besoin d'ajouter la dépendance suivante dans le fichier build.gradle pour activer la fonctionnalité permettant l'usage de cet outil :
+- configurer la propriéte suivante dans le fichier de propriété de CAS :
 
 ```
-implementation "org.apereo.cas:cas-server-support-interrupt-webflow:${project.'cas.version'}"
+cas.interrupt.groovy.location=file:${cas.standalone.configurationDirectory}/interrupt.groovy
 ```
 
-**$CAS_HOME** étant le repertoire d'installation de votre CAS-overlay-template
+- Ajouter la dépendance suivante dans le fichier build.gradle :
 
-### Exemple d'autorisation du service dans CAS
-
-Attention : préciser l'expression regulière associée à la propriété serviceId, en fonction du nom de domaine du serveur CAS.
-
-Créer le fichier suivant dans votre dossier services/ ou via l'application Service Management application.
-
-Fichier claExternalID_Associate-55.json
-``` json
-{
-  "@class" : "org.apereo.cas.services.RegexRegisteredService",
-  "serviceId" : "https://localhost/claExternalID/associate",
-  "name" : "Bonjour",
-  "id" : 55,
-  "description" : "Nous n'avons pas réussi à vous retrouver parmi nos utilisateurs.\nSi vous êtes étudiant ou personnel de l'université Paris 1 Panthéon-Sorbonne, veuillez vous authentifier. Cette opération est à réaliser une fois.\nSi vous n'êtes pas étudiant ou personnel de Paris 1, vous n'êtes pas autorisé à accéder à ce service. Veuillez cliquer sur \"Annuler\" pour vous déconnecter de FranceConnect",
-  "evaluationOrder" : 55,
-  "usernameAttributeProvider" : {
-    "@class" : "org.apereo.cas.services.PrincipalAttributeRegisteredServiceUsernameProvider",
-    "usernameAttribute" : "uid"
-  },
-  "accessStrategy": {
-     "@class" : "org.apereo.cas.services.DefaultRegisteredServiceAccessStrategy",
-     "requiredAttributes" : {
-	    "@class" : "java.util.HashMap",
-	    "uid" : [ "java.util.HashSet", [ ".*" ] ]
-     },
-     "delegatedAuthenticationPolicy" : {
-        "@class" : "org.apereo.cas.services.DefaultRegisteredServiceDelegatedAuthenticationPolicy",
-        "allowedProviders" : [ "java.util.ArrayList", ["AUCUN"] ]
-     }     
-  }
-}
+```
+implementation "org.apereo.cas:cas-server-support-interrupt-webflow"
 ```
 
-De plus, vous aurez finalement besoin de configurer CAS afin que celui-ci retrouve votre utilisateur lors de la seconde 
-authentification :
+### Exemple d'autorisation du service dans Apereo CAS
+
+Créer le fichier [claExternalID_Associate-55.json](./etc/cas/services/claExternalID_Associate-55.json) dans votre dossier 'services/' (CF `cas.service-registry.json.location`) ou via l'application Service Management application.
+
+Il faut aussi configurer Apereo CAS (dans cas.properties) afin que celui-ci retrouve l'utilisateur lors de la seconde authentification :
 
 ``` properties
 # LDAP
-cas.authn.ldap[0].type=ANONYMOUS
-cas.authn.ldap[0].useSsl=false
 cas.authn.ldap[0].ldapUrl=ldap://ldap.univ.fr
 cas.authn.ldap[0].baseDn=ou=users,dc=univ,dc=fr
-cas.authn.ldap[0].dnFormat=ou=users,dc=univ,dc=fr
-cas.authn.ldap[0].searchFilter=cn={user}
+cas.authn.ldap[0].bindDn=......
+cas.authn.ldap[0].bindCredential=**************
+cas.authn.ldap[0].principalAttributeId=uid
+# on autorise plusieurs types d'identifiants, notamment le mail :
+cas.authn.ldap[0].search-filter=(|(uid={user})(supannAliasLogin={user})(mail={user}))
+# limite le nombre d'attributs demandés lors du bind
+cas.authn.ldap[0].principalAttributeList=
 
-cas.authn.ldap[0].principalAttributeList=uid
-
-#Usage d'un bind applicatif dédié
+#Usage d'un bind applicatif dédié pour la lecture / écriture depuis le script
 cas.custom.properties.claExternalID-ldap-bindDn=......
 cas.custom.properties.claExternalID-ldap-bindCredential=**************
 
 
 # Identities reconciliation
-cas.authn.attributeRepository.ldap[0].ldapUrl=ldap://ldap.univ.fr
-cas.authn.attributeRepository.ldap[0].useSsl=false
-cas.authn.attributeRepository.ldap[0].baseDn=ou=users,dc=univ,dc=fr
-# To retrieve LDAP data fill in values unless your ACL permits you to do it without.
-cas.authn.attributeRepository.ldap[0].bindDn=
-cas.authn.attributeRepository.ldap[0].bindCredential=
-cas.authn.attributeRepository.ldap[0].searchFilter=(supannRefId={FranceConnect}{user})
-# Must be the same as usernameAttributeProvider
-cas.authn.attributeRepository.ldap[0].attributes.uid=uid
-# Optional, depending on your settings
-cas.authn.attributeRepository.ldap[0].attributes.cn=cn
-# Display attributes
-cas.authn.attributeRepository.defaultAttributesToRelease=uid,cn
+cas.authn.attribute-repository.ldap[0].ldapUrl=ldap://ldap.univ.fr
+#cas.authn.attribute-repository.ldap[0].bindDn=
+#cas.authn.attribute-repository.ldap[0].bindCredential=
+cas.authn.attribute-repository.ldap[0].search-filter=(|(uid={username})(supannAliasLogin={username})(mail={username})(supannFCSub={username}))
+# hack pour ne PAS récupérer TOUS les attributs LDAP (permet aussi de mapper les attributs, ex: xxx.ldap[0].attributes.nom=givenName)
+cas.authn.attribute-repository.ldap[0].attributes.uid=uid
+cas.authn.attribute-repository.ldap[0].attributes.displayName=displayName
+cas.authn.attribute-repository.ldap[0].attributes.sn=sn
+cas.authn.attribute-repository.ldap[0].attributes.givenName=givenName
+cas.authn.attribute-repository.ldap[0].attributes.mail=mail
+cas.authn.attribute-repository.ldap[0].attributes.eduPersonAffiliation=eduPersonAffiliation
+cas.authn.attribute-repository.ldap[0].attributes.supannEntiteAffectation=supannEntiteAffectation
+cas.authn.attribute-repository.ldap[0].attributes.memberOf=memberOf
+cas.authn.attribute-repository.ldap[0].attributes.labeledURI=labeledURI
+# Par défaut l'attribute-repository utilise en clef un hash non injectif (collisions possibles) conduisant à un mélange de sessions. Depuis CAS 6.2, ces collisions sont moins probables, mais nous vous invitons quand même à désactiver le cache :
+cas.authn.attribute-repository.core.expiration-time=0
+
 ```
 
-Enlever le paramètre de cache. Vu que plusieurs requêtes sont faites à des moments différents lors de l'authentification, le cache pose problème pour le rafraîchissement des attributs qui sont mis à jour par notre module.
-```properties
-cas.authn.attributeRepository.expirationTime=0
-```
 
-
-## Fonctionnement technique sous les versions 6.x de CAS
+## Fonctionnement technique sous les versions 7.x de Apereo CAS
 
 L'essentiel de cet outil repose enrtièrement sur le mechanisme d'interruption mis à dispostion par CAS, qui permet de reprendre la même cinématique d'éxécution que celle des versions antérieurs :
-- CAS vérifie si, après l'authentification OIDC, que l'UID est présent
+- CAS vérifie si, après l'authentification OIDC, l'UID est présent (c'est à dire si le supannFCSub existe dans le LDAP)
     - Sinon, vérifie si il est possible de procéder à une réconciliation automatique des identités :
         - Si oui, renvoi vers le service demandé
         - Sinon procéde à une tentative de réconciliation manuelle des identités :
@@ -104,17 +73,98 @@ L'essentiel de cet outil repose enrtièrement sur le mechanisme d'interruption m
             - Sinon bloque l'accès au service
     - Si oui, renvoi vers le service demandé
 
-## Interface graphique
+## Configuration FranceConnect
+Toujours dans la configuration Apereo CAS
 
-La fonctionnalité regissant l'interruption des authentifctaions offerte par CAS, génére lors de l'éxécution une vue spécifique et dont le contenue s'adapte en fonction de l'état de l'authentification déclenchée,
-si besoin vous pourrez modifier l'aspect de cette dernière pour qu'elle corresponde mieux à vos besoins.
+``` properties
 
-ci-dessous la commande à taper pour accèder à cette vue :
+cas.authn.pac4j.oidc[0].generic.typedIdUsed=false
+cas.authn.pac4j.oidc[0].generic.principalAttributeId=uid
+
+cas.authn.pac4j.oidc[0].generic.enabled=true
+cas.authn.pac4j.oidc[0].generic.name=FranceConnect
+cas.authn.pac4j.oidc[0].generic.client-name=FranceConnect
+cas.authn.pac4j.oidc[0].generic.scope=openid profile email
+cas.authn.pac4j.oidc[0].generic.id=......
+cas.authn.pac4j.oidc[0].generic.secret=**************
+cas.authn.pac4j.oidc[0].generic.discoveryUri=https://fcp-low.integ01.dev-franceconnect.fr/api/v2/.well-known/openid-configuration
+#cas.authn.pac4j.oidc[0].generic.discoveryUri=https://oidc.franceconnect.gouv.fr/api/v2/.well-known/openid-configuration
+cas.authn.pac4j.oidc[0].generic.logoutUrl=https://fcp-low.integ01.dev-franceconnect.fr/api/v2/session/end?state=terminateState&post_logout_redirect_uri=https://cas-test.univ.fr/cas/logout
+#cas.authn.pac4j.oidc[0].generic.logoutUrl=https://oidc.franceconnect.gouv.fr/api/v2/session/end?state=terminateState&post_logout_redirect_uri=https://cas.univ.fr/cas/logout
+cas.authn.pac4j.oidc[0].generic.use-nonce=true
+cas.authn.pac4j.oidc[0].generic.disable-pkce=true
+cas.authn.pac4j.oidc[0].generic.custom-params.acr_values=eidas1
+
 ```
-./gradlew[.bat] getResource -PresourceName=casInterruptView.html
+
+## Mettre à jour les templates Apereo CAS
+
+##### Intégration du bouton FranceConnect
+Copier les fichiers [franceconnect-bouton.svg](src/main/resources/static/images/franceconnect-bouton.svg) et [franceconnect-bouton-on-hover.svg](src/main/resources/static/images/franceconnect-bouton-on-hover.svg) dans 'src/main/resources/static/images/'
+(ou depuis [la documentation FranceConnect](https://docs.partenaires.franceconnect.gouv.fr/fs/fs-integration/integration-bouton-fc/) )
+
+Et définir les règles CSS suivantes :
+
+```css
+#logout-fc {
+    width: 100%;
+    height: 44px;
+    background: #ddd;
+    color: black;
+    border-color: #ccc;
+}
+
+#logout-fc :hover {
+    -webkit-filter: brightness(90%);
+    filter: brightness(90%);
+}
+
+#login-form-controls>.btn-primary, #logout-fc {
+    width: 100%;
+    border-radius: 4px;
+}
+
+#FranceConnect {
+    width: 209px;
+    height: 56px;
+    padding: 0;
+    border-radius: 0;
+    box-shadow: unset;
+    filter: none;
+    transition: all 0.4s ease-in-out;
+    background-image: url("../images/franceconnect-bouton.svg");
+    margin-top: 16px;
+}
+
+#FranceConnect:hover, #FranceConnect:focus {
+    background-image: url("../images/franceconnect-bouton-on-hover.svg");
+    transform: none;
+}
+
+#loginProviders .infoFC {
+    margin-top: 12px;
+    font-size: 14px;
+}
 ```
 
+##### Déconnexion de FranceConnect lors de la demande de réconciliation manuelle
+Dans le fichier 'src/main/resources/templates/fragments/loginProviders.html',
+juste après la section "authnSourceSection", ajouter :
 
+```html
+<section id="authnSourceSection">
+    ...
+</section>
 
-
-
+<div th:replace="~{fragments/submitbutton :: submitButton (messageKey='screen.welcome.button.login')}"></div>
+<div th:if="${registeredService != null && registeredService.name == 'claExternalID-associate'}">
+<br>
+    <input class="mdc-button mdc-button--raised"
+        name="cancel"
+        id="logout-fc"
+        value="Annuler"
+        type="button"
+        onclick="location.href = '/cas/logout'"
+    />
+</div>
+```
