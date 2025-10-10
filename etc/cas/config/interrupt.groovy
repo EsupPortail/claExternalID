@@ -11,6 +11,7 @@ import org.ldaptive.LdapAttribute
 import org.ldaptive.LdapEntry
 import org.ldaptive.BindConnectionInitializer
 import org.ldaptive.ConnectionInitializer
+import org.ldaptive.ResultCode
 import org.ldaptive.SearchOperation
 import org.ldaptive.SearchRequest
 import org.apereo.cas.configuration.CasConfigurationProperties
@@ -80,14 +81,22 @@ ModifyResponse add_supannFCSub(conf, dcf, String fc_sub, String ldap_uid, logger
     }
     
     def requestModify = new ModifyRequest("uid=${ldap_uid},${conf.baseDn}", modifications.toArray(new AttributeModification[0]))
-    return new ModifyOperation(dcf).execute(requestModify)
+    def res = new ModifyOperation(dcf).execute(requestModify)
+    if (!res.isSuccess() && res.resultCode != ResultCode.ATTRIBUTE_OR_VALUE_EXISTS) {
+        logger.error("error adding supannFCSub to user " + ldap_uid + ": " + res.resultCode + " " + res.diagnosticMessage)
+    }
+    return res
 }
 
-ModifyResponse remove_supannFCSub(conf, dcf, String fc_sub, ldap_uid) {
+ModifyResponse remove_supannFCSub(conf, dcf, String fc_sub, ldap_uid, logger) {
     def requestModify = 
         new ModifyRequest("uid=${ldap_uid},${conf.baseDn}", 
             new AttributeModification(AttributeModification.Type.DELETE, new LdapAttribute("supannFCSub", fc_sub)))
-    return new ModifyOperation(dcf).execute(requestModify)
+    def res = new ModifyOperation(dcf).execute(requestModify)
+    if (!res.isSuccess() && res.resultCode != ResultCode.NO_SUCH_ATTRIBUTE) {
+        logger.error("error removing supannFCSub from user " + ldap_uid + ": " + res.resultCode + " " + res.diagnosticMessage)
+    }
+    return res
 }
 
 String getLDAPUserBirthdate(conf, String uid){
@@ -101,10 +110,10 @@ String getLDAPUserBirthdate(conf, String uid){
     return response.getEntry()?.getAttribute("up1BirthDay")?.getStringValue()
 }
 
-def removeTestsFcSub(conf) {
+def removeTestsFcSub(conf, logger) {
     def dcf = ldaptive_connection(conf)
-    remove_supannFCSub(conf, dcf, "bb9efb98cd8d8dee7c1cfd7f3a2d7937fbbd09068b2ac4dce801abaa6eb8e6b4v1", "pldupont")
-    remove_supannFCSub(conf, dcf, "ced88a7b04db5c2e2aefa09ac11966ce8f70502dcc40651b2d74e52fe49b97dfv1", "pldupont")
+    remove_supannFCSub(conf, dcf, "bb9efb98cd8d8dee7c1cfd7f3a2d7937fbbd09068b2ac4dce801abaa6eb8e6b4v1", "pldupont", logger)
+    remove_supannFCSub(conf, dcf, "ced88a7b04db5c2e2aefa09ac11966ce8f70502dcc40651b2d74e52fe49b97dfv1", "pldupont", logger)
 }
 
 abstract class AbstractAttributes {
@@ -402,7 +411,7 @@ def run(principal, attributes, service, registeredService, requestContext, logge
             // on ne fait rien si pas de service (pour debug??)
             return InterruptResponse.none()
         } else if (service.originalUrl == 'http://localhost/integration-tests-cas-server/cleanup') {
-            removeTestsFcSub(conf)
+            removeTestsFcSub(conf, logger)
             return new InterruptResponse("test", !block(), !ssoEnabled())
         } else if (isClaExternalIDService(service) || service.originalUrl == forceDoubleAuthService()) {
             return subInSession_and_ldapInAttrs(conf, logger, service, principal, attributes, session)
