@@ -421,14 +421,14 @@ l        } else if (getFirst(attributes, "sub") && should_force_password_auth_af
         }
     } catch (err) {
         // NB par défaut les msg d'erreur ne sont pas loggués par CAS. On le fait explicitement et avec ce qui est utile :
-        log_error(err);
+        log_error(err, logger);
     }
 }
 
 /**
  * Par défaut les msg d'erreur ne sont pas loggués par CAS. On le fait explicitement et avec ce qui est utile :
  */
-def log_error(err) {
+def log_error(err, logger) {
 	logger.error("{}", err.getMessage())
 	for (def trace: err.getStackTrace()) {
 		if (trace.getFileName()?.endsWith(".groovy"))
