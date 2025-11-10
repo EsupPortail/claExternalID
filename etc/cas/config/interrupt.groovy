@@ -431,6 +431,7 @@ l        } else if (getFirst(attributes, "sub") && should_force_password_auth_af
     } catch (err) {
         // NB par défaut les msg d'erreur ne sont pas loggués par CAS. On le fait explicitement et avec ce qui est utile :
         log_error(err, logger);
+        new InterruptResponse("", !block(), !ssoEnabled());
     }
 }
 
