@@ -54,11 +54,6 @@ String getFirst(Object attributes, String name) {
     return vals == null ? null : vals[0]
 }
 
-// input format is YYYY-MM-DD
-String to_LDAP_generalizedTime(String birthdate) {    
-    return birthdate.replace("-", "") + "000000Z"
-}
-
 DefaultConnectionFactory ldaptive_connection(conf) {
 	def cc = new ConnectionConfig()
 	cc.setReconnectTimeout(Duration.ofSeconds(60))
@@ -103,11 +98,11 @@ String getLDAPUserBirthdate(conf, String uid){
     def searchRequest = SearchRequest.builder()
         .dn(conf.baseDn)
         .filter("(uid=${uid})")
-        .returnAttributes("up1BirthDay")
+        .returnAttributes("supannOIDCDateDeNaissance")
         .sizeLimit(2)
         .build()
     def response = new SearchOperation(ldaptive_connection(conf)).execute(searchRequest);
-    return response.getEntry()?.getAttribute("up1BirthDay")?.getStringValue()
+    return response.getEntry()?.getAttribute("supannOIDCDateDeNaissance")?.getStringValue()
 }
 
 def removeTestsFcSub(conf, logger) {
@@ -176,11 +171,11 @@ def onlyFranceConnectSub(conf, logger, service, principal, attributes, session) 
     def gender = getFirst(attributes, "gender")
     def family_name = getFirst(attributes, "family_name")
     logger.debug("birthdate {}", getFirst(attributes, "birthdate"))
-    def birthdate = to_LDAP_generalizedTime(getFirst(attributes, "birthdate"))
+    def birthdate = getFirst(attributes, "birthdate")
 
     logger.info("attributs récupérés de FranceConnect [{}] [{}] [{}] [{}] [{}] [{}]",sub, given_name, email, gender, family_name, birthdate)
 
-    def birthdateFilter = "(up1BirthDay=${birthdate})"
+    def birthdateFilter = "(supannOIDCDateDeNaissance=${birthdate})"
     def familyNameFilter = "(|(sn=${family_name})(supannNomDeNaissance=${family_name}))"
 
     def givenNameFilter = "(|(supannPrenomsEtatCivil=${given_name})(givenName=${given_name})" // givenNameFilter = "(|(supannPrenomsEtatCivil=Paul Louis)(givenName=Paul Louis)"
@@ -250,7 +245,7 @@ def subInSession_and_ldapInAttrs(conf, logger, service, principal, attributes, s
 
     // on récupère les attributs FC en session
     def fc_sub = session.getAttribute("sub")
-    def fc_birthdate = to_LDAP_generalizedTime(session.getAttribute("birthdate"))
+    def fc_birthdate = session.getAttribute("birthdate")
     if (!fc_sub) throw new Exception("no sub in session")
     if (!fc_birthdate) throw new Exception("no birthdate in session")
 
