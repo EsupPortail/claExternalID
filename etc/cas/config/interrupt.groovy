@@ -181,7 +181,7 @@ def onlyFranceConnectSub(conf, logger, service, principal, attributes, session) 
     logger.info("attributs récupérés de FranceConnect [{}] [{}] [{}] [{}] [{}] [{}]",sub, given_name, email, gender, family_name, birthdate)
 
     def birthdateFilter = "(up1BirthDay=${birthdate})"
-    def familyNameFilter = "(|(sn=${family_name})(up1BirthName=${family_name}))"
+    def familyNameFilter = "(|(sn=${family_name})(supannNomDeNaissance=${family_name}))"
 
     def givenNameFilter = "(|(supannPrenomsEtatCivil=${given_name})(givenName=${given_name})" // givenNameFilter = "(|(supannPrenomsEtatCivil=Paul Louis)(givenName=Paul Louis)"
     given_name.split().each { givenNameFilter +=  "(givenName=${it})"} // givenNameFilter = "(|(supannPrenomsEtatCivil=Paul Louis)(givenName=Paul Louis)(givenName=Paul)(givenName=Louis)"
@@ -297,7 +297,7 @@ class LdapAttributes extends AbstractAttributes {
     String uid
     String supannFCSub
     String sn
-    String up1BirthName
+    String supannNomDeNaissance
     String supannPrenomsEtatCivil
     String givenName
     String mail
@@ -315,7 +315,7 @@ def log_manual_reconciliation(conf, logger, uid, fcAttributes) {
     def searchRequest = SearchRequest.builder()
         .dn(conf.baseDn)
         .filter("(uid=${uid})")
-        .returnAttributes("uid", "supannFCSub", "sn", "up1BirthName", "supannPrenomsEtatCivil", "givenName", "mail", "supannMailPerso", "supannCivilite", "accountStatus")
+        .returnAttributes("uid", "supannFCSub", "sn", "supannNomDeNaissance", "supannPrenomsEtatCivil", "givenName", "mail", "supannMailPerso", "supannCivilite", "accountStatus")
         .sizeLimit(2)
         .build()
     def response = new SearchOperation(ldaptive_connection(conf)).execute(searchRequest);
@@ -328,11 +328,11 @@ def log_manual_reconciliation(conf, logger, uid, fcAttributes) {
 def compareFcAndLdap(fcAttributes, ldapAttributes) {
     def diff = [:]
 
-    // familyNameFilter = "(|(sn=${family_name})(up1BirthName=${family_name}))"
-    if (fcAttributes.family_name !in [ldapAttributes.sn?.toUpperCase(), ldapAttributes.up1BirthName?.toUpperCase()]) {
+    // familyNameFilter = "(|(sn=${family_name})(supannNomDeNaissance=${family_name}))"
+    if (fcAttributes.family_name !in [ldapAttributes.sn?.toUpperCase(), ldapAttributes.supannNomDeNaissance?.toUpperCase()]) {
         diff['family_name'] = fcAttributes.family_name
         diff['sn'] = ldapAttributes.sn
-        diff['up1BirthName'] = ldapAttributes.up1BirthName
+        diff['supannNomDeNaissance'] = ldapAttributes.supannNomDeNaissance
     }
 
     // givenNameFilter
