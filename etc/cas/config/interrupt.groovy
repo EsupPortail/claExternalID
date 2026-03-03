@@ -183,9 +183,7 @@ def onlyFranceConnectSub(conf, logger, service, principal, attributes, session) 
     givenNameFilter += ")" // givenNameFilter = "(|(supannPrenomsEtatCivil=Paul Louis)(givenName=Paul Louis)(givenName=Paul)(givenName=Louis))"
 
     def mailFilter = "(|(mail=${email})(supannMailPerso=${email}))"
-    def civiliteFilter = gender == "MALE" ?
-        "(supannCivilite=M.)" :
-        "(|(supannCivilite=Mlle)(supannCivilite=Mme))"
+    def civiliteFilter = "(supannOIDCGenre=${gender})"
 
     def statusFilter = "(|(accountStatus=active)(!(accountStatus=*)))"
 
@@ -297,7 +295,7 @@ class LdapAttributes extends AbstractAttributes {
     String givenName
     String mail
     String supannMailPerso
-    String supannCivilite
+    String supannOIDCGenre
     String accountStatus
     
     LdapAttributes(LdapEntry entry) {
@@ -310,7 +308,7 @@ def log_manual_reconciliation(conf, logger, uid, fcAttributes) {
     def searchRequest = SearchRequest.builder()
         .dn(conf.baseDn)
         .filter("(uid=${uid})")
-        .returnAttributes("uid", "supannFCSub", "sn", "supannNomDeNaissance", "supannPrenomsEtatCivil", "givenName", "mail", "supannMailPerso", "supannCivilite", "accountStatus")
+        .returnAttributes("uid", "supannFCSub", "sn", "supannNomDeNaissance", "supannPrenomsEtatCivil", "givenName", "mail", "supannMailPerso", "supannOIDCGenre", "accountStatus")
         .sizeLimit(2)
         .build()
     def response = new SearchOperation(ldaptive_connection(conf)).execute(searchRequest);
@@ -348,9 +346,9 @@ def compareFcAndLdap(fcAttributes, ldapAttributes) {
     }
 
     // civiliteFilter
-    if (ldapAttributes.supannCivilite !in (fcAttributes.gender == "MALE" ? ["M."]: ["Mlle", "Mme"])) {
+    if (ldapAttributes.supannOIDCGenre?.toUpperCase() != fcAttributes.gender) {
         diff['gender'] = fcAttributes.gender
-        diff['supannCivilite'] = ldapAttributes.supannCivilite
+        diff['supannOIDCGenre'] = ldapAttributes.supannOIDCGenre
     }
 
     // statusFilter = "(|(accountStatus=active)(!(accountStatus=*)))"
