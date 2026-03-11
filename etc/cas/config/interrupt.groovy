@@ -1,5 +1,9 @@
 import org.apereo.cas.authentication.principal.Service
+import org.apereo.cas.authentication.principal.Principal
+import org.apereo.cas.authentication.principal.attribute.PersonAttributeDao
+import org.apereo.cas.authentication.principal.attribute.PersonAttributes
 import org.apereo.cas.interrupt.InterruptResponse
+import org.apereo.cas.util.spring.beans.BeanContainer
 
 import org.ldaptive.DefaultConnectionFactory
 import org.ldaptive.ConnectionConfig
@@ -15,6 +19,7 @@ import org.ldaptive.ResultCode
 import org.ldaptive.SearchOperation
 import org.ldaptive.SearchRequest
 import org.apereo.cas.configuration.CasConfigurationProperties
+import org.springframework.context.ApplicationContext
 import org.springframework.web.util.UriComponentsBuilder
 
 import java.text.SimpleDateFormat
@@ -162,7 +167,7 @@ def force_LDAP_login(conf, logger, target_service, special_service, attributes, 
     return interrupt_cla
 }
 
-def onlyFranceConnectSub(conf, logger, service, principal, attributes, session) {
+def onlyFranceConnectSub(conf, logger, service, Principal principal, attributes, session, ApplicationContext applicationContext) {
     logger.info("onlyFranceConnectSub")
 
     def sub = getFirst(attributes, "sub")
@@ -192,7 +197,7 @@ def onlyFranceConnectSub(conf, logger, service, principal, attributes, session) 
     def searchRequest = SearchRequest.builder()
         .dn(conf.baseDn)
         .filter(searchFilter)
-        .returnAttributes("uid","displayName","sn","givenName","mail","eduPersonAffiliation","memberOf","labeledURI","accountStatus")
+        .returnAttributes("uid","accountStatus")
         .sizeLimit(2)
         .build()
     def dcf = ldaptive_connection(conf)
@@ -214,9 +219,9 @@ def onlyFranceConnectSub(conf, logger, service, principal, attributes, session) 
         logger.debug("[{}]", res)
 
         logger.debug("on ajoute les attributs LDAP aux attributs CAS")
-        for (attr in entry.getAttributes()) {
-            principal.attributes.put(attr.getName(), attr.getStringValues())
-        }
+        PersonAttributeDao ldapAttributeRepository = applicationContext.getBean("ldapAttributeRepositories", BeanContainer<PersonAttributeDao>.class).first()
+        PersonAttributes ldapAttrs = ldapAttributeRepository.getPerson(uid)
+        principal.attributes.putAll(ldapAttrs.getAttributes())
 
         return res.isSuccess() ? 
             InterruptResponse.none() :  
@@ -385,10 +390,11 @@ def get_conf(CasConfigurationProperties props) {
 
 // NB: "service" est l'object correspondant au query param "service=xxx"
 // NB: "registeredService" est l'entrée dans etc/cas/services/xxx correspondant au service demandé
-def run(principal, attributes, service, registeredService, requestContext, logger, ...other_args) {
+def run(Principal principal, attributes, service, registeredService, requestContext, logger, ...other_args) {
     try {
         final def session = ((HttpServletRequest)requestContext.getExternalContext().getNativeRequest()).getSession()
-        final def props = requestContext.getActiveFlow().getApplicationContext().getBean(CasConfigurationProperties.class);
+        final ApplicationContext applicationContext = requestContext.getActiveFlow().getApplicationContext()
+        final CasConfigurationProperties props = applicationContext.getBean(CasConfigurationProperties.class);
         final def conf = get_conf(props)
 
         logger.debug("principal : [{}]", principal)
@@ -416,7 +422,7 @@ l        } else if (getFirst(attributes, "sub") && should_force_password_auth_af
             logger.debug("we have uid, no interrupt needed")
             return InterruptResponse.none()
         } else if (getFirst(attributes, "sub") && !getFirst(attributes, "uid")) {
-            return onlyFranceConnectSub(conf, logger, service, principal, attributes, session)
+            return onlyFranceConnectSub(conf, logger, service, principal, attributes, session, applicationContext)
         } else {
             logger.warn("no sub nor uid in [{}] [{}]", principal, attributes)
             throw new Exception("no sub nor uid")
